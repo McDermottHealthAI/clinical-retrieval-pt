@@ -23,6 +23,8 @@ Implemented now:
 - simple concrete stage components for smoke usage and examples
 - `MEDSCodeEncoder`, which consumes `batch.code` from MEDS-style batches
 - a small end-to-end doctest example in `model.py`
+- Hydra config groups under `clinical_retrieval_pt/conf`
+- `medrap train` / `medrap eval` CLI entrypoints
 
 ## Quickstart (Synthetic MEDS Batch)
 
@@ -62,3 +64,25 @@ print(out.logits)  # [[1.0, 2.0]]
 ## MEDS Batch Typing
 
 `MEDSCodeEncoder` accepts `meds_torchdata.MEDSTorchBatch` directly.
+
+## CLI
+
+Run with Hydra overrides:
+
+```bash
+uv run medrap train run_smoke=false
+uv run medrap eval run_smoke=false
+```
+
+`medrap` is a thin dispatcher; `train` and `eval` are implemented as Hydra-native
+entrypoints (`@hydra.main`) internally.
+
+Hydra component groups live in:
+
+- `encoder/`
+- `query_projector/`
+- `retriever/`
+- `retrieval_encoder/`
+- `fusion/`
+- `pooling/`
+- `head/`

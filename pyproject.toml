@@ -18,6 +18,8 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+  "hydra-core",
+  "hydra-zen",
   "meds-torch-data",
 ]
 
@@ -29,9 +31,13 @@ docs = []
 
 [tool.setuptools_scm]
 
+[tool.setuptools.package-data]
+clinical_retrieval_pt = ["conf/**/*.yaml"]
+
 [project.optional-dependencies]
 
 [project.scripts]
+medrap = "clinical_retrieval_pt.cli:main"
 
 [tool.pytest.ini_options]
 addopts = [

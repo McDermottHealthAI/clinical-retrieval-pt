@@ -1,0 +1,18 @@
+defaults:
+  - encoder: meds_code
+  - query_projector: identity
+  - retriever: static
+  - retrieval_encoder: identity
+  - fusion: replace
+  - pooling: identity
+  - head: identity
+  - _self_
+
+run_smoke: true
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false
