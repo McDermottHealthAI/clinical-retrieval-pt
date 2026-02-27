@@ -1,3 +1,4 @@
+from .encoders import MEDSCodeEncoder
 from .model import RetrievalAugmentedModel
 from .types import (
     EncoderOutput,
@@ -11,6 +12,7 @@ from .types import (
 __all__ = [
     "EncoderOutput",
     "FusionOutput",
+    "MEDSCodeEncoder",
     "ModelOutput",
     "QueryOutput",
     "RetrievalAugmentedModel",

@@ -21,4 +21,44 @@ Implemented now:
 
 - a concrete pipeline orchestrator (`RetrievalAugmentedModel`)
 - simple concrete stage components for smoke usage and examples
+- `MEDSCodeEncoder`, which consumes `batch.code` from MEDS-style batches
 - a small end-to-end doctest example in `model.py`
+
+## Quickstart (Synthetic MEDS Batch)
+
+```python
+import torch
+
+from clinical_retrieval_pt.encoders import MEDSCodeEncoder
+from clinical_retrieval_pt.fusion import ReplaceFusion
+from clinical_retrieval_pt.heads import IdentityHead
+from clinical_retrieval_pt.model import RetrievalAugmentedModel
+from clinical_retrieval_pt.pooling import IdentityPooling
+from clinical_retrieval_pt.query_projection import IdentityQueryProjector
+from clinical_retrieval_pt.retrieval_encoder import IdentityRetrievalEncoder
+from clinical_retrieval_pt.retrievers import StaticRetriever
+from meds_torchdata import MEDSTorchBatch
+
+model = RetrievalAugmentedModel(
+    encoder=MEDSCodeEncoder(),
+    query_projector=IdentityQueryProjector(),
+    retriever=StaticRetriever(doc_tokens=[[1.0, 2.0]], doc_attention_mask=[[1, 1]]),
+    retrieval_encoder=IdentityRetrievalEncoder(),
+    fusion=ReplaceFusion(),
+    pooling=IdentityPooling(),
+    head=IdentityHead(),
+)
+
+batch = MEDSTorchBatch(
+    code=torch.LongTensor([[101, 7, 0], [42, 3, 0]]),
+    numeric_value=torch.zeros((2, 3), dtype=torch.float32),
+    numeric_value_mask=torch.zeros((2, 3), dtype=torch.bool),
+    time_delta_days=torch.zeros((2, 3), dtype=torch.float32),
+)
+out = model.forward(batch)
+print(out.logits)  # [[1.0, 2.0]]
+```
+
+## MEDS Batch Typing
+
+`MEDSCodeEncoder` accepts `meds_torchdata.MEDSTorchBatch` directly.

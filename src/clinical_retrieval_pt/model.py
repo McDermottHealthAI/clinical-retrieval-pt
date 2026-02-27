@@ -1,7 +1,5 @@
 """RAP API model orchestration."""
 
-from __future__ import annotations
-
 from typing import Any
 
 from .types import ModelOutput
@@ -13,15 +11,17 @@ class RetrievalAugmentedModel:
     This class wires the 4-stage pipeline only; stage behavior is delegated to injected components.
 
     Examples:
-        >>> from clinical_retrieval_pt.encoders import IdentityEncoder
+        >>> import torch
+        >>> from clinical_retrieval_pt.encoders import MEDSCodeEncoder
         >>> from clinical_retrieval_pt.fusion import ReplaceFusion
         >>> from clinical_retrieval_pt.heads import IdentityHead
+        >>> from meds_torchdata import MEDSTorchBatch
         >>> from clinical_retrieval_pt.pooling import IdentityPooling
         >>> from clinical_retrieval_pt.query_projection import IdentityQueryProjector
         >>> from clinical_retrieval_pt.retrieval_encoder import IdentityRetrievalEncoder
         >>> from clinical_retrieval_pt.retrievers import StaticRetriever
         >>> model = RetrievalAugmentedModel(
-        ...     encoder=IdentityEncoder(),
+        ...     encoder=MEDSCodeEncoder(),
         ...     query_projector=IdentityQueryProjector(),
         ...     retriever=StaticRetriever(doc_tokens=[[1.0, 2.0]], doc_attention_mask=[[1, 1]]),
         ...     retrieval_encoder=IdentityRetrievalEncoder(),
@@ -29,7 +29,13 @@ class RetrievalAugmentedModel:
         ...     pooling=IdentityPooling(),
         ...     head=IdentityHead(),
         ... )
-        >>> out = model.forward(batch={"not_used_yet": True})
+        >>> batch = MEDSTorchBatch(
+        ...     code=torch.LongTensor([[101, 0], [42, 7]]),
+        ...     numeric_value=torch.zeros((2, 2), dtype=torch.float32),
+        ...     numeric_value_mask=torch.zeros((2, 2), dtype=torch.bool),
+        ...     time_delta_days=torch.zeros((2, 2), dtype=torch.float32),
+        ... )
+        >>> out = model.forward(batch=batch)
         >>> out.logits
         [[1.0, 2.0]]
         >>> sorted(out.metadata)

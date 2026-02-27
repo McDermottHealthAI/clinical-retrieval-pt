@@ -1,11 +1,4 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
-from .types import RetrievalEncoderOutput
-
-if TYPE_CHECKING:
-    from .types import RetrieverOutput
+from .types import RetrievalEncoderOutput, RetrieverOutput
 
 
 class IdentityRetrievalEncoder:

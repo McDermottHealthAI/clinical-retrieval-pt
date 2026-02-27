@@ -3,8 +3,6 @@
 This module defines the stage-by-stage outputs used by the RAP pipeline.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import Any
 
