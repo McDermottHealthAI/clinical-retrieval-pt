@@ -20,6 +20,29 @@ class RetrievalAugmentedModel:
     """Composable pipeline orchestrator for RAP.
 
     This class wires the 4-stage pipeline only; stage behavior is delegated to injected components.
+
+    Examples:
+        >>> from clinical_retrieval_pt.encoders import IdentityEncoder
+        >>> from clinical_retrieval_pt.fusion import ReplaceFusion
+        >>> from clinical_retrieval_pt.heads import IdentityHead
+        >>> from clinical_retrieval_pt.pooling import IdentityPooling
+        >>> from clinical_retrieval_pt.query_projection import IdentityQueryProjector
+        >>> from clinical_retrieval_pt.retrieval_encoder import IdentityRetrievalEncoder
+        >>> from clinical_retrieval_pt.retrievers import StaticRetriever
+        >>> model = RetrievalAugmentedModel(
+        ...     encoder=IdentityEncoder(),
+        ...     query_projector=IdentityQueryProjector(),
+        ...     retriever=StaticRetriever(doc_tokens=[[1.0, 2.0]], doc_attention_mask=[[1, 1]]),
+        ...     retrieval_encoder=IdentityRetrievalEncoder(),
+        ...     fusion=ReplaceFusion(),
+        ...     pooling=IdentityPooling(),
+        ...     head=IdentityHead(),
+        ... )
+        >>> out = model.forward(batch={"not_used_yet": True})
+        >>> out.logits
+        [[1.0, 2.0]]
+        >>> sorted(out.metadata)
+        ['fusion_output', 'query_output', 'retrieval_encoder_output', 'retriever_output']
     """
 
     def __init__(

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from .types import EncoderOutput
+from .types import EncoderOutput
 
 
 class PatientEncoder:
@@ -16,3 +15,11 @@ class PatientEncoder:
             NotImplementedError: Always for base class.
         """
         raise NotImplementedError("PatientEncoder.encode is not implemented for base class.")
+
+
+class IdentityEncoder(PatientEncoder):
+    """Concrete encoder that treats input batch as already-encoded patient state."""
+
+    def encode(self, batch: Any) -> EncoderOutput:
+        """Return the input batch directly as patient state."""
+        return EncoderOutput(patient_state=batch, attention_mask=None)

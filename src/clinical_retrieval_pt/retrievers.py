@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from .types import RetrieverOutput
+from .types import RetrieverOutput
 
 
 class Retriever:
@@ -16,3 +15,30 @@ class Retriever:
             NotImplementedError: Always for base class.
         """
         raise NotImplementedError("Retriever.retrieve is not implemented in base class.")
+
+
+class StaticRetriever(Retriever):
+    """Concrete retriever that returns pre-specified retrieval outputs."""
+
+    def __init__(
+        self,
+        *,
+        doc_tokens: Any,
+        doc_attention_mask: Any,
+        doc_scores: Any | None = None,
+        doc_ids: Any | None = None,
+    ) -> None:
+        self.doc_tokens = doc_tokens
+        self.doc_attention_mask = doc_attention_mask
+        self.doc_scores = doc_scores
+        self.doc_ids = doc_ids
+
+    def retrieve(self, query_embeddings: Any) -> RetrieverOutput:
+        """Ignore query embeddings and return fixed retrieval output."""
+        del query_embeddings
+        return RetrieverOutput(
+            doc_tokens=self.doc_tokens,
+            doc_attention_mask=self.doc_attention_mask,
+            doc_scores=self.doc_scores,
+            doc_ids=self.doc_ids,
+        )
