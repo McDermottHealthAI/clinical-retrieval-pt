@@ -8,19 +8,7 @@ if TYPE_CHECKING:
     from .types import RetrieverOutput
 
 
-class RetrievalEncoder:
-    """Base retrieval encoder interface."""
-
-    def encode(self, retrieval: RetrieverOutput) -> RetrievalEncoderOutput:
-        """Encode retrieved documents into retrieval memory.
-
-        Raises:
-            NotImplementedError: Always for base class.
-        """
-        raise NotImplementedError("RetrievalEncoder.encode is not implemented.")
-
-
-class IdentityRetrievalEncoder(RetrievalEncoder):
+class IdentityRetrievalEncoder:
     """Concrete retrieval encoder that reuses retrieved tokens as memory."""
 
     def encode(self, retrieval: RetrieverOutput) -> RetrievalEncoderOutput:

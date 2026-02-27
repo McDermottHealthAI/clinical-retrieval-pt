@@ -17,10 +17,8 @@ Retrieval-augmented pretraining (RAP) for MEDS-style EHR data.
 
 This is a work-in-progress.
 
-Current scope:
+Implemented now:
 
-- pipeline stage interfaces and typed contracts
-- top-level RAP pipeline orchestration scaffold
-- API design coverage for `Config A / B / C` in the design spec
-
-Concrete implementations are not included yet.
+- a concrete pipeline orchestrator (`RetrievalAugmentedModel`)
+- simple concrete stage components for smoke usage and examples
+- a small end-to-end doctest example in `model.py`

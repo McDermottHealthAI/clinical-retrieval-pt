@@ -15,11 +15,9 @@ class EncoderOutput:
 
     Attributes:
         patient_state: Encoded patient representation with shape ``(B, *P)``.
-        attention_mask: Optional EHR attention mask with shape ``(B, S_ehr)``.
     """
 
     patient_state: Any
-    attention_mask: Any | None = None
 
 
 @dataclass(slots=True)
@@ -45,12 +43,15 @@ class RetrieverOutput:
         doc_attention_mask: Retrieved token mask with shape ``(B, R, K, S_doc)``.
         doc_scores: Optional retrieval scores with shape ``(B, R, K)``.
         doc_ids: Optional retrieval identifiers with shape ``(B, R, K)``.
+        doc_key_embeddings: Optional retrieved key embeddings with shape
+            ``(B, R, K, D_ret)`` for in-graph query-key scoring losses.
     """
 
     doc_tokens: Any
     doc_attention_mask: Any
     doc_scores: Any | None = None
     doc_ids: Any | None = None
+    doc_key_embeddings: Any | None = None
 
 
 @dataclass(slots=True)

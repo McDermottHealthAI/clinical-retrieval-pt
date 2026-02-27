@@ -2,16 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from .encoders import PatientEncoder
-    from .fusion import Fusion
-    from .heads import PredictionHead
-    from .pooling import Pooling
-    from .query_projection import QueryProjector
-    from .retrieval_encoder import RetrievalEncoder
-    from .retrievers import Retriever
+from typing import Any
 
 from .types import ModelOutput
 
@@ -48,13 +39,13 @@ class RetrievalAugmentedModel:
     def __init__(
         self,
         *,
-        encoder: PatientEncoder,
-        query_projector: QueryProjector,
-        retriever: Retriever,
-        retrieval_encoder: RetrievalEncoder,
-        fusion: Fusion,
-        pooling: Pooling,
-        head: PredictionHead,
+        encoder: Any,
+        query_projector: Any,
+        retriever: Any,
+        retrieval_encoder: Any,
+        fusion: Any,
+        pooling: Any,
+        head: Any,
     ) -> None:
         self.encoder = encoder
         self.query_projector = query_projector
@@ -67,10 +58,7 @@ class RetrievalAugmentedModel:
     def forward(self, batch: Any) -> ModelOutput:
         """Run the end-to-end RAP pipeline."""
         encoder_out = self.encoder.encode(batch)
-        query_out = self.query_projector.project(
-            encoder_out.patient_state,
-            attention_mask=encoder_out.attention_mask,
-        )
+        query_out = self.query_projector.project(encoder_out.patient_state)
         retrieval_out = self.retriever.retrieve(query_out.query_embeddings)
         retrieval_encoded = self.retrieval_encoder.encode(retrieval_out)
         fusion_out = self.fusion.fuse(
@@ -79,7 +67,7 @@ class RetrievalAugmentedModel:
             retrieval_step_ids=query_out.retrieval_step_ids,
             doc_attention_mask=retrieval_out.doc_attention_mask,
         )
-        pooled = self.pooling.pool(fusion_out.fused_state, attention_mask=encoder_out.attention_mask)
+        pooled = self.pooling.pool(fusion_out.fused_state)
         logits = self.head.predict(pooled)
 
         return ModelOutput(
