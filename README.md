@@ -44,7 +44,7 @@ from meds_torchdata import MEDSTorchBatch
 model = RetrievalAugmentedModel(
     encoder=MEDSCodeEncoder(),
     query_projector=IdentityQueryProjector(),
-    retriever=StaticRetriever(doc_tokens=[[1.0, 2.0]], doc_attention_mask=[[1, 1]]),
+    retriever=StaticRetriever(doc_tokens=[[1, 2]], doc_attention_mask=[[1, 1]]),
     retrieval_encoder=IdentityRetrievalEncoder(),
     fusion=ReplaceFusion(),
     pooling=IdentityPooling(),
@@ -58,7 +58,7 @@ batch = MEDSTorchBatch(
     time_delta_days=torch.zeros((2, 3), dtype=torch.float32),
 )
 out = model.forward(batch)
-print(out.logits)  # [[1.0, 2.0]]
+print(out.logits)  # tensor([[1, 2]])
 ```
 
 ## MEDS Batch Typing

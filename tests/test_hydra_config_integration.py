@@ -25,7 +25,7 @@ def test_train_config_composes_and_instantiates_model() -> None:
 
     assert isinstance(model, RetrievalAugmentedModel)
     out = model.forward(_example_batch())
-    assert out.logits == [[1.0, 2.0]]
+    assert torch.equal(out.logits, torch.LongTensor([[1, 2]]))
 
 
 def test_app_config_registers_with_hydra_config_store() -> None:

@@ -4,7 +4,8 @@ This module defines the stage-by-stage outputs used by the RAP pipeline.
 """
 
 from dataclasses import dataclass, field
-from typing import Any
+
+from torch import Tensor
 
 
 @dataclass(slots=True)
@@ -15,7 +16,7 @@ class EncoderOutput:
         patient_state: Encoded patient representation with shape ``(B, *P)``.
     """
 
-    patient_state: Any
+    patient_state: Tensor
 
 
 @dataclass(slots=True)
@@ -28,8 +29,8 @@ class QueryOutput:
             Present in sequence mode (Config A), absent in tabular modes (B/C).
     """
 
-    query_embeddings: Any
-    retrieval_step_ids: Any | None = None
+    query_embeddings: Tensor
+    retrieval_step_ids: Tensor | None = None
 
 
 @dataclass(slots=True)
@@ -45,11 +46,11 @@ class RetrieverOutput:
             ``(B, R, K, D_ret)`` for in-graph query-key scoring losses.
     """
 
-    doc_tokens: Any
-    doc_attention_mask: Any
-    doc_scores: Any | None = None
-    doc_ids: Any | None = None
-    doc_key_embeddings: Any | None = None
+    doc_tokens: Tensor
+    doc_attention_mask: Tensor
+    doc_scores: Tensor | None = None
+    doc_ids: Tensor | None = None
+    doc_key_embeddings: Tensor | None = None
 
 
 @dataclass(slots=True)
@@ -61,7 +62,7 @@ class RetrievalEncoderOutput:
             ``(B, R, K, S_doc, D_mem)``.
     """
 
-    retrieval_memory: Any
+    retrieval_memory: Tensor
 
 
 @dataclass(slots=True)
@@ -72,7 +73,7 @@ class FusionOutput:
         fused_state: Fused representation with shape ``(B, *F)``.
     """
 
-    fused_state: Any
+    fused_state: Tensor
 
 
 @dataclass(slots=True)
@@ -84,5 +85,5 @@ class ModelOutput:
         metadata: Optional side outputs (for diagnostics and training utilities).
     """
 
-    logits: Any
-    metadata: dict[str, Any] = field(default_factory=dict)
+    logits: Tensor
+    metadata: dict[str, object] = field(default_factory=dict)

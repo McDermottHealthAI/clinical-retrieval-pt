@@ -1,11 +1,11 @@
 """RAP API model orchestration."""
 
-from typing import Any
+from torch import nn
 
 from .types import ModelOutput
 
 
-class RetrievalAugmentedModel:
+class RetrievalAugmentedModel(nn.Module):
     """Composable pipeline orchestrator for RAP.
 
     This class wires the 4-stage pipeline only; stage behavior is delegated to injected components.
@@ -23,7 +23,7 @@ class RetrievalAugmentedModel:
         >>> model = RetrievalAugmentedModel(
         ...     encoder=MEDSCodeEncoder(),
         ...     query_projector=IdentityQueryProjector(),
-        ...     retriever=StaticRetriever(doc_tokens=[[1.0, 2.0]], doc_attention_mask=[[1, 1]]),
+        ...     retriever=StaticRetriever(doc_tokens=[[1, 2]], doc_attention_mask=[[1, 1]]),
         ...     retrieval_encoder=IdentityRetrievalEncoder(),
         ...     fusion=ReplaceFusion(),
         ...     pooling=IdentityPooling(),
@@ -37,7 +37,7 @@ class RetrievalAugmentedModel:
         ... )
         >>> out = model.forward(batch=batch)
         >>> out.logits
-        [[1.0, 2.0]]
+        tensor([[1, 2]])
         >>> sorted(out.metadata)
         ['fusion_output', 'query_output', 'retrieval_encoder_output', 'retriever_output']
     """
@@ -45,14 +45,15 @@ class RetrievalAugmentedModel:
     def __init__(
         self,
         *,
-        encoder: Any,
-        query_projector: Any,
-        retriever: Any,
-        retrieval_encoder: Any,
-        fusion: Any,
-        pooling: Any,
-        head: Any,
+        encoder: nn.Module,
+        query_projector: nn.Module,
+        retriever: nn.Module,
+        retrieval_encoder: nn.Module,
+        fusion: nn.Module,
+        pooling: nn.Module,
+        head: nn.Module,
     ) -> None:
+        super().__init__()
         self.encoder = encoder
         self.query_projector = query_projector
         self.retriever = retriever
@@ -61,20 +62,20 @@ class RetrievalAugmentedModel:
         self.pooling = pooling
         self.head = head
 
-    def forward(self, batch: Any) -> ModelOutput:
+    def forward(self, batch: object) -> ModelOutput:
         """Run the end-to-end RAP pipeline."""
-        encoder_out = self.encoder.encode(batch)
-        query_out = self.query_projector.project(encoder_out.patient_state)
-        retrieval_out = self.retriever.retrieve(query_out.query_embeddings)
-        retrieval_encoded = self.retrieval_encoder.encode(retrieval_out)
-        fusion_out = self.fusion.fuse(
+        encoder_out = self.encoder(batch)
+        query_out = self.query_projector(encoder_out.patient_state)
+        retrieval_out = self.retriever(query_out.query_embeddings)
+        retrieval_encoded = self.retrieval_encoder(retrieval_out)
+        fusion_out = self.fusion(
             patient_state=encoder_out.patient_state,
             retrieval_memory=retrieval_encoded.retrieval_memory,
             retrieval_step_ids=query_out.retrieval_step_ids,
             doc_attention_mask=retrieval_out.doc_attention_mask,
         )
-        pooled = self.pooling.pool(fusion_out.fused_state)
-        logits = self.head.predict(pooled)
+        pooled = self.pooling(fusion_out.fused_state)
+        logits = self.head(pooled)
 
         return ModelOutput(
             logits=logits,

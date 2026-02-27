@@ -5,7 +5,6 @@ from concrete components.
 """
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from hydra.core.config_store import ConfigStore
 from hydra_zen import builds, instantiate
@@ -35,7 +34,7 @@ StaticRetrieverConfig = builds(
 DemoStaticRetrieverConfig = builds(
     StaticRetriever,
     populate_full_signature=True,
-    doc_tokens=[[1.0, 2.0]],
+    doc_tokens=[[1, 2]],
     doc_attention_mask=[[1, 1]],
     zen_dataclass={"cls_name": "DemoStaticRetrieverConfig"},
 )
@@ -94,7 +93,7 @@ def default_pipeline_config() -> PipelineConfig:
     return PipelineConfig()
 
 
-def instantiate_model(config: Any) -> RetrievalAugmentedModel:
+def instantiate_model(config: PipelineConfig) -> RetrievalAugmentedModel:
     """Instantiate a ``RetrievalAugmentedModel`` from structured config."""
     return RetrievalAugmentedModel(
         encoder=instantiate(config.encoder),

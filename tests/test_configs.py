@@ -44,7 +44,7 @@ def test_default_pipeline_config_instantiates_default_components() -> None:
 def test_pipeline_config_allows_overriding_retriever_values() -> None:
     cfg = PipelineConfig(
         retriever=StaticRetrieverConfig(
-            doc_tokens=[[9.0, 8.0]],
+            doc_tokens=[[9, 8]],
             doc_attention_mask=[[1, 1]],
         )
     )
@@ -52,4 +52,4 @@ def test_pipeline_config_allows_overriding_retriever_values() -> None:
 
     out = model.forward(_example_batch())
 
-    assert out.logits == [[9.0, 8.0]]
+    assert torch.equal(out.logits, torch.LongTensor([[9, 8]]))
