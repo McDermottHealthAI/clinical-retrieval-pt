@@ -2,16 +2,16 @@ import torch
 from meds_torchdata import MEDSTorchBatch
 from torch import nn
 
-from clinical_retrieval_pt.configs import default_pipeline_config, instantiate_model
-from clinical_retrieval_pt.encoders import MEDSCodeEncoder
-from clinical_retrieval_pt.fusion import ReplaceFusion
-from clinical_retrieval_pt.heads import IdentityHead
-from clinical_retrieval_pt.model import RetrievalAugmentedModel
-from clinical_retrieval_pt.pooling import IdentityPooling
-from clinical_retrieval_pt.query_projection import IdentityQueryProjector
-from clinical_retrieval_pt.retrieval_encoder import IdentityRetrievalEncoder
-from clinical_retrieval_pt.retrievers import StaticRetriever
-from clinical_retrieval_pt.types import RetrieverOutput
+from medrap.configs import default_pipeline_config, instantiate_model
+from medrap.encoders import MEDSCodeEncoder
+from medrap.fusion import ReplaceFusion
+from medrap.heads import IdentityHead
+from medrap.model import RetrievalAugmentedModel
+from medrap.pooling import IdentityPooling
+from medrap.query_projection import IdentityQueryProjector
+from medrap.retrieval_encoder import IdentityRetrievalEncoder
+from medrap.retrievers import StaticRetriever
+from medrap.types import RetrieverOutput
 
 
 class TrainableHead(nn.Module):

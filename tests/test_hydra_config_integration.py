@@ -3,9 +3,9 @@ from hydra import compose, initialize_config_module
 from hydra.core.config_store import ConfigStore
 from meds_torchdata import MEDSTorchBatch
 
-from clinical_retrieval_pt.configs import RAPAppConfig
-from clinical_retrieval_pt.model import RetrievalAugmentedModel
-from clinical_retrieval_pt.runtime import build_model_from_cfg
+from medrap.configs import RAPAppConfig
+from medrap.model import RetrievalAugmentedModel
+from medrap.runtime import build_model_from_cfg
 
 
 def _example_batch() -> MEDSTorchBatch:
@@ -18,7 +18,7 @@ def _example_batch() -> MEDSTorchBatch:
 
 
 def test_train_config_composes_and_instantiates_model() -> None:
-    with initialize_config_module(version_base=None, config_module="clinical_retrieval_pt.conf"):
+    with initialize_config_module(version_base=None, config_module="medrap.conf"):
         cfg = compose(config_name="_train")
 
     model = build_model_from_cfg(cfg)

@@ -1,7 +1,7 @@
 import torch
 from meds_torchdata import MEDSTorchBatch
 
-from clinical_retrieval_pt.encoders import MEDSCodeEncoder
+from medrap.encoders import MEDSCodeEncoder
 
 
 def test_meds_code_encoder_uses_batch_code_as_patient_state() -> None:

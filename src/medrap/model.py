@@ -12,14 +12,14 @@ class RetrievalAugmentedModel(nn.Module):
 
     Examples:
         >>> import torch
-        >>> from clinical_retrieval_pt.encoders import MEDSCodeEncoder
-        >>> from clinical_retrieval_pt.fusion import ReplaceFusion
-        >>> from clinical_retrieval_pt.heads import IdentityHead
+        >>> from medrap.encoders import MEDSCodeEncoder
+        >>> from medrap.fusion import ReplaceFusion
+        >>> from medrap.heads import IdentityHead
         >>> from meds_torchdata import MEDSTorchBatch
-        >>> from clinical_retrieval_pt.pooling import IdentityPooling
-        >>> from clinical_retrieval_pt.query_projection import IdentityQueryProjector
-        >>> from clinical_retrieval_pt.retrieval_encoder import IdentityRetrievalEncoder
-        >>> from clinical_retrieval_pt.retrievers import StaticRetriever
+        >>> from medrap.pooling import IdentityPooling
+        >>> from medrap.query_projection import IdentityQueryProjector
+        >>> from medrap.retrieval_encoder import IdentityRetrievalEncoder
+        >>> from medrap.retrievers import StaticRetriever
         >>> model = RetrievalAugmentedModel(
         ...     encoder=MEDSCodeEncoder(),
         ...     query_projector=IdentityQueryProjector(),

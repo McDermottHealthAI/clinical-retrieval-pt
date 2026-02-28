@@ -3,7 +3,7 @@ requires = ["setuptools>=80.9.0", "setuptools-scm>=9.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "clinical-retrieval-pt"
+name = "medrap"
 dynamic = ["version"]
 authors = [
   {name="Matthew McDermott", email="mattmcdermott8@gmail.com"},
@@ -32,12 +32,12 @@ docs = []
 [tool.setuptools_scm]
 
 [tool.setuptools.package-data]
-clinical_retrieval_pt = ["conf/**/*.yaml"]
+medrap = ["conf/**/*.yaml"]
 
 [project.optional-dependencies]
 
 [project.scripts]
-medrap = "clinical_retrieval_pt.cli:main"
+medrap = "medrap.cli:main"
 
 [tool.pytest.ini_options]
 addopts = [
@@ -52,8 +52,8 @@ markers = []
 doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 
 [project.urls]
-Homepage = "https://github.com/McDermottHealthAI/clinical-retrieval-pt"
-Issues = "https://github.com/McDermottHealthAI/clinical-retrieval-pt/issues"
+Homepage = "https://github.com/McDermottHealthAI/MedRAP"
+Issues = "https://github.com/McDermottHealthAI/MedRAP/issues"
 
 [tool.ruff]
 target-version = "py312"

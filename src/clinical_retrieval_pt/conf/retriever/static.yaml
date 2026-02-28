@@ -1,5 +1,0 @@
-_target_: clinical_retrieval_pt.retrievers.StaticRetriever
-doc_tokens:
-  - [1.0, 2.0]
-doc_attention_mask:
-  - [1, 1]

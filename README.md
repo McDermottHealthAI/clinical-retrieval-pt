@@ -1,14 +1,14 @@
-# clinical-retrieval-pt
+# medrap
 
-[![Status: WIP](https://img.shields.io/badge/status-WIP-orange)](https://github.com/McDermottHealthAI/clinical-retrieval-pt)
+[![Status: WIP](https://img.shields.io/badge/status-WIP-orange)](https://github.com/McDermottHealthAI/MedRAP)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
-[![PyPI - Version](https://img.shields.io/pypi/v/clinical-retrieval-pt)](https://pypi.org/project/clinical-retrieval-pt/)
-[![Documentation Status](https://readthedocs.org/projects/clinical-retrieval-pt/badge/?version=latest)](https://clinical-retrieval-pt.readthedocs.io/en/latest/?badge=latest)
-[![Tests](https://github.com/McDermottHealthAI/clinical-retrieval-pt/actions/workflows/tests.yaml/badge.svg)](https://github.com/McDermottHealthAI/clinical-retrieval-pt/actions/workflows/tests.yaml)
-[![Test Coverage](https://codecov.io/github/McDermottHealthAI/clinical-retrieval-pt/graph/badge.svg)](https://codecov.io/github/McDermottHealthAI/clinical-retrieval-pt)
-[![Code Quality](https://github.com/McDermottHealthAI/clinical-retrieval-pt/actions/workflows/code-quality-main.yaml/badge.svg)](https://github.com/McDermottHealthAI/clinical-retrieval-pt/actions/workflows/code-quality-main.yaml)
-[![Contributors](https://img.shields.io/github/contributors/McDermottHealthAI/clinical-retrieval-pt.svg)](https://github.com/McDermottHealthAI/clinical-retrieval-pt/graphs/contributors)
-[![Pull Requests](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/McDermottHealthAI/clinical-retrieval-pt/pulls)
+[![PyPI - Version](https://img.shields.io/pypi/v/medrap)](https://pypi.org/project/medrap/)
+[![Documentation Status](https://readthedocs.org/projects/MedRAP/badge/?version=latest)](https://medrap.readthedocs.io/en/latest/?badge=latest)
+[![Tests](https://github.com/McDermottHealthAI/MedRAP/actions/workflows/tests.yaml/badge.svg)](https://github.com/McDermottHealthAI/MedRAP/actions/workflows/tests.yaml)
+[![Test Coverage](https://codecov.io/github/McDermottHealthAI/MedRAP/graph/badge.svg)](https://codecov.io/github/McDermottHealthAI/MedRAP)
+[![Code Quality](https://github.com/McDermottHealthAI/MedRAP/actions/workflows/code-quality-main.yaml/badge.svg)](https://github.com/McDermottHealthAI/MedRAP/actions/workflows/code-quality-main.yaml)
+[![Contributors](https://img.shields.io/github/contributors/McDermottHealthAI/MedRAP.svg)](https://github.com/McDermottHealthAI/MedRAP/graphs/contributors)
+[![Pull Requests](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/McDermottHealthAI/MedRAP/pulls)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Retrieval-augmented pretraining (RAP) for MEDS-style EHR data.
@@ -23,7 +23,7 @@ Implemented now:
 - simple concrete stage components for smoke usage and examples
 - `MEDSCodeEncoder`, which consumes `batch.code` from MEDS-style batches
 - a small end-to-end doctest example in `model.py`
-- Hydra config groups under `clinical_retrieval_pt/conf`
+- Hydra config groups under `medrap/conf`
 - `medrap train` / `medrap eval` CLI entrypoints
 
 ## Quickstart (Synthetic MEDS Batch)
@@ -31,14 +31,14 @@ Implemented now:
 ```python
 import torch
 
-from clinical_retrieval_pt.encoders import MEDSCodeEncoder
-from clinical_retrieval_pt.fusion import ReplaceFusion
-from clinical_retrieval_pt.heads import IdentityHead
-from clinical_retrieval_pt.model import RetrievalAugmentedModel
-from clinical_retrieval_pt.pooling import IdentityPooling
-from clinical_retrieval_pt.query_projection import IdentityQueryProjector
-from clinical_retrieval_pt.retrieval_encoder import IdentityRetrievalEncoder
-from clinical_retrieval_pt.retrievers import StaticRetriever
+from medrap.encoders import MEDSCodeEncoder
+from medrap.fusion import ReplaceFusion
+from medrap.heads import IdentityHead
+from medrap.model import RetrievalAugmentedModel
+from medrap.pooling import IdentityPooling
+from medrap.query_projection import IdentityQueryProjector
+from medrap.retrieval_encoder import IdentityRetrievalEncoder
+from medrap.retrievers import StaticRetriever
 from meds_torchdata import MEDSTorchBatch
 
 model = RetrievalAugmentedModel(

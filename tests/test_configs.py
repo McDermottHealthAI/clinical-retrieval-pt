@@ -1,20 +1,20 @@
 import torch
 from meds_torchdata import MEDSTorchBatch
 
-from clinical_retrieval_pt.configs import (
+from medrap.configs import (
     PipelineConfig,
     StaticRetrieverConfig,
     default_pipeline_config,
     instantiate_model,
 )
-from clinical_retrieval_pt.encoders import MEDSCodeEncoder
-from clinical_retrieval_pt.fusion import ReplaceFusion
-from clinical_retrieval_pt.heads import IdentityHead
-from clinical_retrieval_pt.model import RetrievalAugmentedModel
-from clinical_retrieval_pt.pooling import IdentityPooling
-from clinical_retrieval_pt.query_projection import IdentityQueryProjector
-from clinical_retrieval_pt.retrieval_encoder import IdentityRetrievalEncoder
-from clinical_retrieval_pt.retrievers import StaticRetriever
+from medrap.encoders import MEDSCodeEncoder
+from medrap.fusion import ReplaceFusion
+from medrap.heads import IdentityHead
+from medrap.model import RetrievalAugmentedModel
+from medrap.pooling import IdentityPooling
+from medrap.query_projection import IdentityQueryProjector
+from medrap.retrieval_encoder import IdentityRetrievalEncoder
+from medrap.retrievers import StaticRetriever
 
 
 def _example_batch() -> MEDSTorchBatch:

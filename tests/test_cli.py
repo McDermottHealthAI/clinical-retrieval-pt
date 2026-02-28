@@ -1,4 +1,4 @@
-from clinical_retrieval_pt.cli import eval_main, main, train_main
+from medrap.cli import eval_main, main, train_main
 
 
 def test_medrap_train_cli_runs_with_overrides() -> None:
