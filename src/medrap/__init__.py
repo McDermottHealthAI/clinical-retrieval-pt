@@ -1,6 +1,5 @@
 from .configs import (
     DemoStaticRetrieverConfig,
-    LinearHeadConfig,
     PipelineConfig,
     RAPAppConfig,
     StaticRetrieverConfig,
@@ -11,7 +10,6 @@ from .encoders import MEDSCodeEncoder
 from .heads import LinearHead
 from .lightning_module import MedRAPLightningModule
 from .model import RetrievalAugmentedModel
-from .training_metrics import ClassificationMetrics
 from .types import (
     EncoderOutput,
     FusionOutput,
@@ -22,12 +20,10 @@ from .types import (
 )
 
 __all__ = [
-    "ClassificationMetrics",
     "DemoStaticRetrieverConfig",
     "EncoderOutput",
     "FusionOutput",
     "LinearHead",
-    "LinearHeadConfig",
     "MEDSCodeEncoder",
     "MedRAPLightningModule",
     "ModelOutput",
