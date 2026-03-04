@@ -1,4 +1,4 @@
-"""PyTorch Lightning wrapper for supervised MedRAP training."""
+"""PyTorch Lightning orchestration module for MedRAP training."""
 
 from __future__ import annotations
 
@@ -12,7 +12,8 @@ import torch
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch import Tensor, nn
 
-from .training_metrics import ClassificationMetrics
+from .batch_adapter import MEDSSupervisedBatchAdapter
+from .task import BinaryClassificationTask, SupervisedTask
 from .types import ModelOutput
 
 try:
@@ -46,14 +47,7 @@ def _factory_to_dict(factory: partial | None) -> dict[str, Any] | None:
 
 
 def _normalize_factory(factory: object, *, name: str) -> partial | None:
-    """Normalize factory values from Python/Hydra inputs.
-
-    Supported forms:
-    - ``None``
-    - ``functools.partial``
-    - empty mapping/DictConfig (treated as ``None``)
-    - Hydra mapping with ``_target_`` (instantiated as ``_partial_=True``)
-    """
+    """Normalize factory values from Python/Hydra inputs."""
     if factory is None:
         return None
     if isinstance(factory, partial):
@@ -72,51 +66,8 @@ def _normalize_factory(factory: object, *, name: str) -> partial | None:
             raise TypeError(f"{name} mapping must include '_target_' when not empty.")
         return hydra.utils.instantiate(dict(factory), _partial_=True)
     if callable(factory):
-        # Wrap callables to keep optimizer/scheduler invocation shape uniform.
         return partial(factory)
     raise TypeError(f"Unsupported {name} type: {type(factory)!r}")
-
-
-def _from_mapping(batch: Mapping[str, object]) -> tuple[object, Tensor]:
-    inputs = None
-    for key in ("batch", "inputs", "x"):
-        if key in batch:
-            inputs = batch[key]
-            break
-
-    targets = None
-    for key in ("target", "targets", "label", "labels", "y"):
-        if key in batch:
-            targets = batch[key]
-            break
-
-    if inputs is None or targets is None:
-        raise ValueError("Expected mapping batch with both input and target keys.")
-    if not isinstance(targets, Tensor):
-        raise TypeError("Expected tensor targets in mapping batch.")
-    return inputs, targets
-
-
-def _unpack_supervised_batch(batch: object) -> tuple[object, Tensor]:
-    if isinstance(batch, tuple | list) and len(batch) == 2:
-        inputs, targets = batch
-        if not isinstance(targets, Tensor):
-            raise TypeError("Expected tensor targets in tuple/list batch.")
-        return inputs, targets
-
-    if isinstance(batch, Mapping):
-        return _from_mapping(batch)
-
-    if hasattr(batch, "batch"):
-        inputs = batch.batch
-        for attr in ("target", "targets", "label", "labels", "y"):
-            if hasattr(batch, attr):
-                targets = getattr(batch, attr)
-                if not isinstance(targets, Tensor):
-                    raise TypeError("Expected tensor targets in object batch.")
-                return inputs, targets
-
-    raise ValueError("Unsupported batch type for supervised training.")
 
 
 if lightning is None:
@@ -132,30 +83,36 @@ if lightning is None:
 else:
 
     class MedRAPLightningModule(lightning.LightningModule):
-        """Lightning module for supervised MedRAP training/evaluation."""
+        """Task-agnostic Lightning orchestration for MedRAP."""
 
         def __init__(
             self,
             *,
             model: nn.Module,
-            metrics: nn.Module | None = None,
+            task: SupervisedTask | None = None,
+            batch_adapter: MEDSSupervisedBatchAdapter | None = None,
             optimizer: object = None,
-            lr_scheduler: (object) = None,
+            lr_scheduler: object = None,
         ) -> None:
             super().__init__()
             self.model = model
-            self.metrics = metrics if metrics is not None else ClassificationMetrics(num_classes=2)
+            self.task = task if task is not None else BinaryClassificationTask()
+            self.batch_adapter = (
+                batch_adapter
+                if batch_adapter is not None
+                else MEDSSupervisedBatchAdapter(label_field=self.task.label_field)
+            )
             self.optimizer_factory = _normalize_factory(
                 optimizer or partial(torch.optim.AdamW, lr=1e-3, weight_decay=0.01),
                 name="optimizer",
             )
             self.lr_scheduler_factory = _normalize_factory(lr_scheduler, name="lr_scheduler")
-            self.loss_fn = nn.CrossEntropyLoss()
 
             self.save_hyperparameters(
                 {
                     "optimizer": _factory_to_dict(self.optimizer_factory),
                     "lr_scheduler": _factory_to_dict(self.lr_scheduler_factory),
+                    "task_target": self.task.label_field,
                 }
             )
 
@@ -165,6 +122,10 @@ else:
                 return out.logits
             if isinstance(out, Tensor):
                 return out
+            if hasattr(out, "logits"):
+                logits = out.logits
+                if isinstance(logits, Tensor):
+                    return logits
             raise TypeError(f"Unexpected model output type: {type(out)!r}")
 
         @staticmethod
@@ -181,50 +142,47 @@ else:
                 if not self._is_norm_bias_param(name):
                     yield self.get_parameter(name)
 
-        def _log_metrics(self, stage: str, loss: Tensor, logits: Tensor, targets: Tensor) -> None:
+        def _run_stage(self, batch: object, *, stage: str) -> Tensor:
+            adapted = self.batch_adapter(batch)
+            if adapted.label_field != self.task.label_field:
+                raise ValueError(
+                    f"Batch adapter produced label field {adapted.label_field!r} but task expects "
+                    f"{self.task.label_field!r}."
+                )
+
+            logits = self.forward(adapted.model_input)
+            step_out = self.task.step(logits, adapted.targets)
+
             is_train = stage == "train"
-            batch_size = int(targets.shape[0])
+            batch_size = int(step_out.targets.shape[0])
 
             self._safe_log(
                 f"{stage}/loss",
-                loss,
+                step_out.loss,
                 on_step=is_train,
                 on_epoch=True,
                 prog_bar=True,
                 batch_size=batch_size,
             )
-
-            metric_values = self.metrics(logits, targets)
             self._safe_log_dict(
-                {f"{stage}/{k}": v for k, v in metric_values.items()},
+                {f"{stage}/{k}": v for k, v in step_out.metrics.items()},
                 on_step=is_train,
                 on_epoch=True,
                 batch_size=batch_size,
             )
+            return step_out.loss
 
         def training_step(self, batch: object, batch_idx: int) -> Tensor:
             del batch_idx
-            inputs, targets = _unpack_supervised_batch(batch)
-            logits = self.forward(inputs)
-            loss = self.loss_fn(logits, targets.long())
-            self._log_metrics("train", loss, logits, targets)
-            return loss
+            return self._run_stage(batch, stage="train")
 
         def validation_step(self, batch: object, batch_idx: int) -> Tensor:
             del batch_idx
-            inputs, targets = _unpack_supervised_batch(batch)
-            logits = self.forward(inputs)
-            loss = self.loss_fn(logits, targets.long())
-            self._log_metrics("val", loss, logits, targets)
-            return loss
+            return self._run_stage(batch, stage="val")
 
         def test_step(self, batch: object, batch_idx: int) -> Tensor:
             del batch_idx
-            inputs, targets = _unpack_supervised_batch(batch)
-            logits = self.forward(inputs)
-            loss = self.loss_fn(logits, targets.long())
-            self._log_metrics("test", loss, logits, targets)
-            return loss
+            return self._run_stage(batch, stage="test")
 
         def configure_optimizers(self) -> torch.optim.Optimizer | dict[str, Any]:
             params = [
@@ -249,7 +207,6 @@ else:
             }
 
         def _safe_log(self, name: str, value: Tensor, **kwargs: Any) -> None:
-            # Unit tests call step methods directly without Trainer attachment.
             if getattr(self, "_trainer", None) is not None:
                 self.log(name, value, **kwargs)
 
