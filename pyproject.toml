@@ -20,7 +20,9 @@ classifiers = [
 dependencies = [
   "hydra-core",
   "hydra-zen",
+  "lightning>=2.5,<3",
   "meds-torch-data",
+  "torchmetrics",
 ]
 
 [dependency-groups]
@@ -33,8 +35,6 @@ docs = []
 
 [tool.setuptools.package-data]
 medrap = ["conf/**/*.yaml"]
-
-[project.optional-dependencies]
 
 [project.scripts]
 medrap = "medrap.cli:main"

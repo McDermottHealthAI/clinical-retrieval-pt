@@ -5,10 +5,16 @@ defaults:
   - retrieval_encoder: identity
   - fusion: replace
   - pooling: identity
-  - head: identity
+  - head: linear
+  - lightning_module: default
+  - datamodule: default
+  - trainer: default
   - _self_
 
-run_smoke: true
+output_dir: .
+run_smoke: false
+checkpoint_path: null
+eval_split: test
 
 hydra:
   run:

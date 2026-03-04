@@ -1,0 +1,9 @@
+defaults:
+  - metrics: default
+  - optimizer: adamw
+  - lr_scheduler: none
+  - _self_
+
+_target_: medrap.lightning_module.MedRAPLightningModule
+
+model: ???

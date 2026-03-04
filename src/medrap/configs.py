@@ -11,7 +11,7 @@ from hydra_zen import builds, instantiate
 
 from .encoders import MEDSCodeEncoder
 from .fusion import ReplaceFusion
-from .heads import IdentityHead
+from .heads import IdentityHead, LinearHead
 from .model import RetrievalAugmentedModel
 from .pooling import IdentityPooling
 from .query_projection import IdentityQueryProjector
@@ -53,6 +53,10 @@ IdentityPoolingConfig = builds(
 IdentityHeadConfig = builds(
     IdentityHead,
     zen_dataclass={"cls_name": "IdentityHeadConfig"},
+)
+LinearHeadConfig = builds(
+    LinearHead,
+    zen_dataclass={"cls_name": "LinearHeadConfig"},
 )
 
 

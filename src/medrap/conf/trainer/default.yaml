@@ -1,0 +1,16 @@
+_target_: lightning.pytorch.trainer.Trainer
+
+default_root_dir: ${output_dir}
+
+max_epochs: 1
+limit_train_batches: 2
+limit_val_batches: 1
+limit_test_batches: 1
+log_every_n_steps: 1
+
+accelerator: cpu
+devices: 1
+
+enable_checkpointing: false
+logger: false
+enable_model_summary: false

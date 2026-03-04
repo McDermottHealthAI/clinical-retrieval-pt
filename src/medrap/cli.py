@@ -5,30 +5,65 @@ import sys
 from collections.abc import Sequence
 
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from hydra.utils import instantiate
+from omegaconf import DictConfig
 
 from .runtime import build_example_batch, build_model_from_cfg
 
 
-def _run_cfg(cfg: DictConfig) -> int:
+def _run_train_cfg(cfg: DictConfig) -> int:
     model = build_model_from_cfg(cfg)
 
+    if cfg.get("run_smoke", False):
+        out = model.forward(build_example_batch())
+        print(out.logits)
+        return 0
+
+    datamodule = instantiate(cfg.datamodule)
+    lightning_module = instantiate(cfg.lightning_module, model=model)
+    trainer = instantiate(cfg.trainer)
+    trainer.fit(
+        model=lightning_module,
+        datamodule=datamodule,
+        ckpt_path=cfg.get("resume_from_checkpoint"),
+    )
+    if cfg.get("run_test_after_fit", False):
+        trainer.test(
+            model=lightning_module,
+            datamodule=datamodule,
+            ckpt_path=cfg.get("test_ckpt_path"),
+        )
+    return 0
+
+
+def _run_eval_cfg(cfg: DictConfig) -> int:
+    model = build_model_from_cfg(cfg)
     if cfg.get("run_smoke", True):
         out = model.forward(build_example_batch())
         print(out.logits)
     else:
-        print(OmegaConf.to_yaml(cfg))
+        datamodule = instantiate(cfg.datamodule)
+        lightning_module = instantiate(cfg.lightning_module, model=model)
+        trainer = instantiate(cfg.trainer)
+        eval_split = str(cfg.get("eval_split", "test"))
+        ckpt_path = cfg.get("checkpoint_path")
+        if eval_split == "test":
+            trainer.test(model=lightning_module, datamodule=datamodule, ckpt_path=ckpt_path)
+        elif eval_split in {"val", "validate"}:
+            trainer.validate(model=lightning_module, datamodule=datamodule, ckpt_path=ckpt_path)
+        else:
+            raise ValueError(f"Unsupported eval_split={eval_split!r}. Use one of: test, val, validate.")
     return 0
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="_train")
 def _train_hydra(cfg: DictConfig) -> int:
-    return _run_cfg(cfg)
+    return _run_train_cfg(cfg)
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="_eval")
 def _eval_hydra(cfg: DictConfig) -> int:
-    return _run_cfg(cfg)
+    return _run_eval_cfg(cfg)
 
 
 def train_main(overrides: Sequence[str] | None = None) -> int:
