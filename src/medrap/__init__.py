@@ -9,7 +9,6 @@ from .configs import (
 )
 from .encoders import MEDSCodeEncoder
 from .heads import LinearHead
-from .lightning_datamodule import DemoMedRAPDataModule
 from .lightning_module import MedRAPLightningModule
 from .model import RetrievalAugmentedModel
 from .training_metrics import ClassificationMetrics
@@ -24,7 +23,6 @@ from .types import (
 
 __all__ = [
     "ClassificationMetrics",
-    "DemoMedRAPDataModule",
     "DemoStaticRetrieverConfig",
     "EncoderOutput",
     "FusionOutput",

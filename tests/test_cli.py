@@ -21,7 +21,7 @@ def test_medrap_train_cli_runs_with_overrides() -> None:
 
 
 def test_medrap_eval_cli_runs_with_overrides() -> None:
-    assert main(["eval", "run_smoke=false"]) == 0
+    assert main(["eval", "run_smoke=false", "datamodule=demo"]) == 0
 
 
 def test_train_entrypoint_runs_with_hydra_overrides() -> None:
@@ -29,7 +29,7 @@ def test_train_entrypoint_runs_with_hydra_overrides() -> None:
 
 
 def test_eval_entrypoint_runs_with_hydra_overrides() -> None:
-    assert eval_main(["run_smoke=false"]) == 0
+    assert eval_main(["run_smoke=false", "datamodule=demo"]) == 0
 
 
 @dataclass
@@ -173,6 +173,7 @@ def test_train_and_eval_checkpoint_roundtrip(tmp_path) -> None:
             config_name="_train",
             overrides=[
                 "run_smoke=false",
+                "datamodule=demo",
                 f"output_dir={tmp_path}",
                 "trainer.max_epochs=1",
                 "trainer.limit_train_batches=1",
@@ -193,6 +194,7 @@ def test_train_and_eval_checkpoint_roundtrip(tmp_path) -> None:
             config_name="_eval",
             overrides=[
                 "run_smoke=false",
+                "datamodule=demo",
                 f"output_dir={tmp_path}",
                 f"checkpoint_path='{checkpoint}'",
                 "eval_split=test",
@@ -200,6 +202,7 @@ def test_train_and_eval_checkpoint_roundtrip(tmp_path) -> None:
                 "trainer.logger=false",
                 "trainer.enable_checkpointing=false",
                 "trainer.enable_model_summary=false",
+                "trainer.callbacks=[]",
             ],
         )
     assert cli._run_eval_cfg(eval_cfg) == 0
