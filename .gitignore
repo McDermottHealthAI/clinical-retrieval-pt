@@ -208,3 +208,8 @@ __marimo__/
 
 # Warp
 WARP.md
+
+# medrap local runtime outputs
+train_resolved.yaml
+eval_resolved.yaml
+logs/

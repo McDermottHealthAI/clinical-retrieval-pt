@@ -11,78 +11,169 @@
 [![Pull Requests](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/McDermottHealthAI/MedRAP/pulls)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Retrieval-augmented pretraining (RAP) for MEDS-style EHR data.
+Retrieval-augmented pretraining/reasoning scaffold for MEDS-style EHR data.
 
-## Status
+## Scope
 
-This is a work-in-progress.
+This package is organized to match MEDS ecosystem patterns:
 
-Implemented now:
+- Data/config integration with `meds-torch-data`
+- Hydra + Lightning app structure similar to `MEDS_EIC_AR`
+- Task semantics based on MEDS LabelSchema fields:
+    - `boolean_value`
+    - `integer_value`
+    - `float_value`
+    - `categorical_value`
 
-- a concrete pipeline orchestrator (`RetrievalAugmentedModel`)
-- simple concrete stage components for smoke usage and examples
-- `MEDSCodeEncoder`, which consumes `batch.code` from MEDS-style batches
-- a small end-to-end doctest example in `model.py`
-- Hydra config groups under `medrap/conf`
-- `medrap train` / `medrap eval` CLI entrypoints
+The Lightning module is task-agnostic orchestration. Task logic (loss, metrics, target handling) lives in task objects.
 
-## Quickstart (Synthetic MEDS Batch)
+## Install
 
-```python
-import torch
-
-from medrap.encoders import MEDSCodeEncoder
-from medrap.fusion import ReplaceFusion
-from medrap.heads import IdentityHead
-from medrap.model import RetrievalAugmentedModel
-from medrap.pooling import IdentityPooling
-from medrap.query_projection import IdentityQueryProjector
-from medrap.retrieval_encoder import IdentityRetrievalEncoder
-from medrap.retrievers import StaticRetriever
-from meds_torchdata import MEDSTorchBatch
-
-model = RetrievalAugmentedModel(
-    encoder=MEDSCodeEncoder(),
-    query_projector=IdentityQueryProjector(),
-    retriever=StaticRetriever(doc_tokens=[[1, 2]], doc_attention_mask=[[1, 1]]),
-    retrieval_encoder=IdentityRetrievalEncoder(),
-    fusion=ReplaceFusion(),
-    pooling=IdentityPooling(),
-    head=IdentityHead(),
-)
-
-batch = MEDSTorchBatch(
-    code=torch.LongTensor([[101, 7, 0], [42, 3, 0]]),
-    numeric_value=torch.zeros((2, 3), dtype=torch.float32),
-    numeric_value_mask=torch.zeros((2, 3), dtype=torch.bool),
-    time_delta_days=torch.zeros((2, 3), dtype=torch.float32),
-)
-out = model.forward(batch)
-print(out.logits)  # tensor([[1, 2]])
+```bash
+uv sync
 ```
 
-## MEDS Batch Typing
+## Config Layout
 
-`MEDSCodeEncoder` accepts `meds_torchdata.MEDSTorchBatch` directly.
+Top-level train/eval configs compose nested groups:
+
+- `datamodule/`
+- `lightning_module/`
+- `model/`
+- `optimizer/`
+- `LR_scheduler/`
+- `metrics/`
+- `task/`
+- `trainer/`
+- `callbacks/`
+- `logger/`
+
+See [`src/medrap/conf`](src/medrap/conf).
 
 ## CLI
 
-Run with Hydra overrides:
-
 ```bash
-uv run medrap train run_smoke=false
-uv run medrap eval run_smoke=false
+uv run medrap train ...
+uv run medrap eval ...
 ```
 
-`medrap` is a thin dispatcher; `train` and `eval` are implemented as Hydra-native
-entrypoints (`@hydra.main`) internally.
+`medrap` is a thin command dispatcher over Hydra-native train/eval entrypoints.
 
-Hydra component groups live in:
+## Quick Smoke Run
 
-- `encoder/`
-- `query_projector/`
-- `retriever/`
-- `retrieval_encoder/`
-- `fusion/`
-- `pooling/`
-- `head/`
+```bash
+uv run medrap train run_smoke=true
+uv run medrap eval run_smoke=true
+```
+
+`run_smoke=true` uses an internal tiny batch builder (test-oriented), not the MEDS datamodule stack.
+
+## Real MEDS Supervised Run
+
+```bash
+uv run medrap train \
+	run_smoke=false \
+	datamodule=task_supervised \
+	datamodule.config.tensorized_cohort_dir=/abs/path/to/tensorized_cohort \
+	datamodule.config.task_labels_dir=/abs/path/to/task_labels \
+	task=binary \
+	batch_adapter.label_field=boolean_value \
+	model/head=linear
+```
+
+For task-label supervision, `seq_sampling_strategy=TO_END` is required and validated.
+
+## Eval From Checkpoint
+
+```bash
+uv run medrap eval \
+	run_smoke=false \
+	checkpoint_path=/abs/path/to/checkpoints/epoch=0-step=123.ckpt \
+	eval_split=test
+```
+
+Resolved train/eval configs are persisted to `output_dir` (`train_resolved.yaml`, `eval_resolved.yaml`).
+
+## Synthetic Research Scaffolding
+
+Synthetic retrieval-experiment primitives live under
+[`src/medrap/experiments/synthetic`](src/medrap/experiments/synthetic) and include:
+
+- oracle retriever
+- learned key/query retriever
+- corrupted-key retriever
+- label-collision and continuous-target toy recipes
+
+## Semi-Synthetic MIMIC-IV Demo Experiment
+
+The first runnable experiment lives under
+[`src/medrap/experiments/semi_synthetic`](src/medrap/experiments/semi_synthetic).
+
+Design:
+
+- input: patient drug sets from a MEDS-formatted dataset root (`data/*/*.parquet`)
+- target: whether any patient drug is a beta blocker
+- corpus: one synthetic document per normalized drug
+- main model: retrieval-only downstream prediction (patient features are discarded after retrieval)
+
+This setup intentionally exposes an under-specification/equivalence-class issue:
+classification can be correct while top-1 retrieval is not patient-consistent.
+
+### 1. Run the experiment
+
+```bash
+uv run medrap semi-synthetic-mimic \
+	preprocessing.meds_root=/abs/path/to/MEDS_dataset_root \
+	output_dir=/abs/path/to/output/dir
+```
+
+You can override any Hydra config in
+[`src/medrap/conf/experiments/semi_synthetic_mimic_demo.yaml`](src/medrap/conf/experiments/semi_synthetic_mimic_demo.yaml).
+
+### 2. What gets produced
+
+`output_dir` will contain:
+
+- `semi_synthetic_resolved.yaml`:
+    - full resolved Hydra config used for the run
+- `prepared/`:
+    - `examples.jsonl`
+    - `splits.json`
+    - `drug_vocab.json`
+    - `summary.json`
+- `corpus/`:
+    - `documents.jsonl`
+    - `features.pt`
+    - `summary.json`
+- `reports/`:
+    - `<baseline>_test_summary.json` per baseline
+    - `metrics_by_baseline.csv`:
+        - one row per metric with columns:
+            - `experiment`
+            - `baseline`
+            - `source` (`test_summary` or `callback_metrics`)
+            - `metric`
+            - `value`
+    - `metrics_by_baseline.json`: same content as JSON rows
+- `experiment_report.json`:
+    - cohort stats, corpus stats, and baseline metrics
+
+### 3. Baselines included
+
+- `learned`: trainable query encoder + dense retrieval
+- `no_retrieval`: direct patient-vector classifier
+- `oracle`: retrieval forced to true patient drug document
+- `oracle_positive`: retrieval forced to true positive-category patient drug (when available)
+- `random`: random document retrieval
+
+### 4. Retrieval metrics reported
+
+- top-1 hit against any true patient drug document
+- top-1 positive-doc label rate (`top1_is_positive_doc_label`)
+- top-1 hit against any true positive-category patient drug document
+- label-consistent but patient-inconsistent retrieval rate
+- learned-model soft retrieval mass on:
+    - any patient docs
+    - patient positive-category docs
+
+Task reporting also includes `pos_rate` and `pred_pos_rate_at_0_5` for threshold calibration context.
