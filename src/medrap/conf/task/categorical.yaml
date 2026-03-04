@@ -1,0 +1,7 @@
+_target_: medrap.task.CategoricalClassificationTask
+num_classes: 3
+label_field: categorical_value
+output_dim: ${task.num_classes}
+loss:
+  _target_: torch.nn.CrossEntropyLoss
+metrics: ${metrics}

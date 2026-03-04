@@ -1,16 +1,18 @@
 defaults:
-  - encoder: meds_code
-  - query_projector: identity
-  - retriever: static
-  - retrieval_encoder: identity
-  - fusion: replace
-  - pooling: identity
-  - head: linear
+  - model: default
+  - task: binary
+  - metrics: binary
+  - batch_adapter: default
+  - optimizer: adamw
+  - LR_scheduler: none
   - lightning_module: default
-  - datamodule: default
+  - datamodule: meds_torchdata
+  - callbacks: default
+  - logger: csv
   - trainer: default
   - _self_
 
+max_seq_len: 256
 output_dir: .
 run_smoke: false
 checkpoint_path: null

@@ -1,0 +1,3 @@
+accuracy:
+  _target_: medrap.task.BinaryAccuracy
+  threshold: 0.5

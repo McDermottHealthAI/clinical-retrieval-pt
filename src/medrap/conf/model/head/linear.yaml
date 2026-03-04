@@ -1,0 +1,2 @@
+_target_: medrap.heads.LinearHead
+out_features: ${task.output_dim}

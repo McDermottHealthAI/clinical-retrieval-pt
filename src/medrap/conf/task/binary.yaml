@@ -1,0 +1,6 @@
+_target_: medrap.task.BinaryClassificationTask
+label_field: boolean_value
+output_dim: 1
+loss:
+  _target_: torch.nn.BCEWithLogitsLoss
+metrics: ${metrics}

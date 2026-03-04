@@ -1,5 +1,6 @@
 """Runtime helpers for smoke-running the RAP scaffold."""
 
+import hydra
 import torch
 from meds_torchdata import MEDSTorchBatch
 
@@ -7,7 +8,9 @@ from .configs import instantiate_model
 
 
 def build_model_from_cfg(cfg: object):
-    """Build a ``RetrievalAugmentedModel`` from Hydra-style component config."""
+    """Build a ``RetrievalAugmentedModel`` from Hydra-style model config."""
+    if hasattr(cfg, "model"):
+        return hydra.utils.instantiate(cfg.model)
     return instantiate_model(cfg)
 
 

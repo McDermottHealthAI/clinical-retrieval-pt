@@ -1,2 +1,0 @@
-_target_: medrap.heads.LinearHead
-out_features: ${datamodule.num_classes}

@@ -8,10 +8,10 @@ from hydra.utils import instantiate
 from meds_torchdata import MEDSTorchBatch
 
 from medrap.configs import RAPAppConfig
-from medrap.lightning_datamodule import DemoMedRAPDataModule
 from medrap.lightning_module import MedRAPLightningModule
 from medrap.model import RetrievalAugmentedModel
 from medrap.runtime import build_model_from_cfg
+from tests.support.demo_lightning_datamodule import DemoMedRAPDataModule
 
 HAS_LIGHTNING = bool(importlib.util.find_spec("lightning")) or bool(
     importlib.util.find_spec("pytorch_lightning")
@@ -36,7 +36,8 @@ def test_train_config_composes_and_instantiates_model() -> None:
     assert isinstance(model, RetrievalAugmentedModel)
     out = model.forward(_example_batch())
     assert isinstance(out.logits, torch.Tensor)
-    assert out.logits.shape[1] == 2
+    assert out.logits.shape[1] == int(cfg.task.output_dim)
+    assert str(cfg.datamodule._target_).endswith("Datamodule")
 
 
 def test_train_config_instantiates_lightning_stack() -> None:
@@ -44,7 +45,7 @@ def test_train_config_instantiates_lightning_stack() -> None:
         pytest.skip("lightning is not available")
 
     with initialize_config_module(version_base=None, config_module="medrap.conf"):
-        cfg = compose(config_name="_train")
+        cfg = compose(config_name="_train", overrides=["datamodule=demo"])
 
     datamodule = instantiate(cfg.datamodule)
     lightning_module = instantiate(cfg.lightning_module, model=build_model_from_cfg(cfg))
@@ -59,6 +60,14 @@ def test_app_config_registers_with_hydra_config_store() -> None:
 
     assert "medrap" in cs.repo
     assert "RAPAppConfig.yaml" in cs.repo["medrap"]
+
+
+def test_meds_torch_data_config_registered_in_hydra_store() -> None:
+    cs = ConfigStore.instance()
+
+    assert "datamodule" in cs.repo
+    assert "config" in cs.repo["datamodule"]
+    assert "MEDSTorchDataConfig.yaml" in cs.repo["datamodule"]["config"]
 
 
 def test_train_config_supports_meds_torchdata_datamodule_override(tmp_path) -> None:
@@ -77,3 +86,26 @@ def test_train_config_supports_meds_torchdata_datamodule_override(tmp_path) -> N
     datamodule = instantiate(cfg.datamodule)
     assert datamodule.__class__.__name__ == "Datamodule"
     assert str(datamodule.config.tensorized_cohort_dir) == str(tmp_path)
+
+
+def test_task_supervised_datamodule_uses_to_end_sampling(tmp_path) -> None:
+    if not HAS_LIGHTNING:
+        pytest.skip("lightning is not available")
+
+    task_labels_dir = tmp_path / "labels"
+    task_labels_dir.mkdir(parents=True, exist_ok=True)
+
+    with initialize_config_module(version_base=None, config_module="medrap.conf"):
+        cfg = compose(
+            config_name="_train",
+            overrides=[
+                "datamodule=task_supervised",
+                f"datamodule.config.tensorized_cohort_dir={tmp_path}",
+                f"datamodule.config.task_labels_dir={task_labels_dir}",
+            ],
+        )
+
+    datamodule = instantiate(cfg.datamodule)
+    assert datamodule.__class__.__name__ == "Datamodule"
+    assert str(datamodule.config.task_labels_dir) == str(task_labels_dir)
+    assert str(datamodule.config.seq_sampling_strategy).lower().endswith("to_end")

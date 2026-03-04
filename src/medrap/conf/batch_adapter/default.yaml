@@ -1,0 +1,2 @@
+_target_: medrap.batch_adapter.MEDSSupervisedBatchAdapter
+label_field: ${task.label_field}

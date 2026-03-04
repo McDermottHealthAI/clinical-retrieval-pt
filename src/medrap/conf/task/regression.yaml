@@ -1,0 +1,6 @@
+_target_: medrap.task.RegressionTask
+label_field: float_value
+output_dim: 1
+loss:
+  _target_: torch.nn.MSELoss
+metrics: ${metrics}

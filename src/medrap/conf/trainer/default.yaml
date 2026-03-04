@@ -11,6 +11,7 @@ log_every_n_steps: 1
 accelerator: cpu
 devices: 1
 
-enable_checkpointing: false
-logger: false
+enable_checkpointing: true
+logger: ${logger}
+callbacks: ${callbacks}
 enable_model_summary: false

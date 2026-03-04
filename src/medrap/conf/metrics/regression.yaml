@@ -1,0 +1,4 @@
+mse:
+  _target_: medrap.task.MeanSquaredErrorMetric
+mae:
+  _target_: medrap.task.MeanAbsoluteErrorMetric

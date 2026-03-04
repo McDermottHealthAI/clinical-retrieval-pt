@@ -1,15 +1,12 @@
+defaults:
+  - config: MEDSTorchDataConfig
+  - _self_
+
 _target_: meds_torchdata.extensions.lightning_datamodule.Datamodule
 
 config:
-  _target_: meds_torchdata.MEDSTorchDataConfig
-  tensorized_cohort_dir: ???
-  max_seq_len: 256
-  seq_sampling_strategy: random
-  padding_side: right
-  static_inclusion_mode: include
-  task_labels_dir: null
-  batch_mode: SM
-  include_window_last_observed_in_schema: false
+  max_seq_len: ${max_seq_len}
+  static_inclusion_mode: INCLUDE
 
 batch_size: 8
 num_workers: 0
