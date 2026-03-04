@@ -1,0 +1,70 @@
+output_dir: ${hydra:runtime.cwd}/outputs/semi_synthetic_mimic_demo
+
+preprocessing:
+  meds_root: ???
+  label_mapping_path: ${hydra:runtime.cwd}/src/medrap/experiments/semi_synthetic/resources/beta_blocker_labels.json
+  unresolved_policy: exclude
+  subject_col: subject_id
+  admission_col: hadm_id
+  code_col: code
+  medication_code_regex: ^MEDICATION//
+  medication_name_regex: ^MEDICATION//(?:START|STOP)//(.+)$
+  split_names:
+    - train
+    - tuning
+    - held_out
+  max_shards_per_split: null
+  max_rows_per_shard: null
+  split_seed: 13
+  val_fraction: 0.2
+  test_fraction: 0.2
+
+corpus:
+  label_mapping_path: ${preprocessing.label_mapping_path}
+  category_name: beta blocker
+  exclude_unresolved: true
+
+datamodule:
+  batch_size: 32
+  num_workers: 0
+  pin_memory: false
+  drop_examples_missing_docs: true
+
+model:
+  hidden_dim: 128
+  encoder_depth: 2
+
+retriever:
+  top_k: 1
+
+optimizer:
+  learning_rate: 0.001
+  weight_decay: 0.0001
+
+experiment:
+  seed: 13
+  baselines:
+    - learned
+    - no_retrieval
+    - oracle
+    - oracle_positive
+    - random
+
+trainer:
+  _target_: lightning.pytorch.trainer.Trainer
+  default_root_dir: ${output_dir}
+  max_epochs: 5
+  accelerator: cpu
+  devices: 1
+  logger: false
+  enable_checkpointing: false
+  enable_model_summary: false
+  log_every_n_steps: 1
+  deterministic: true
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

@@ -21,7 +21,7 @@ def test_medrap_train_cli_runs_with_overrides() -> None:
 
 
 def test_medrap_eval_cli_runs_with_overrides() -> None:
-    assert main(["eval", "run_smoke=false"]) == 0
+    assert main(["eval", "run_smoke=false", "datamodule=demo"]) == 0
 
 
 def test_train_entrypoint_runs_with_hydra_overrides() -> None:
@@ -29,7 +29,19 @@ def test_train_entrypoint_runs_with_hydra_overrides() -> None:
 
 
 def test_eval_entrypoint_runs_with_hydra_overrides() -> None:
-    assert eval_main(["run_smoke=false"]) == 0
+    assert eval_main(["run_smoke=false", "datamodule=demo"]) == 0
+
+
+def test_semi_synthetic_subcommand_dispatches(monkeypatch: pytest.MonkeyPatch) -> None:
+    called: dict[str, object] = {}
+
+    def fake_run(overrides: list[str] | None = None) -> int:
+        called["overrides"] = list(overrides or [])
+        return 0
+
+    monkeypatch.setattr(cli, "semi_synthetic_mimic_main", fake_run)
+    assert main(["semi-synthetic-mimic", "foo=bar"]) == 0
+    assert called["overrides"] == ["foo=bar"]
 
 
 @dataclass
@@ -48,10 +60,13 @@ class _RecorderTrainer:
         self.validate_kwargs = kwargs
 
 
-def test_run_train_cfg_forwards_resume_ckpt_and_optional_test(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_train_cfg_forwards_resume_ckpt_and_optional_test(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     cfg = OmegaConf.create(
         {
             "run_smoke": False,
+            "output_dir": str(tmp_path),
             "resume_from_checkpoint": "resume.ckpt",
             "run_test_after_fit": True,
             "test_ckpt_path": "best.ckpt",
@@ -91,6 +106,7 @@ def test_run_train_cfg_forwards_resume_ckpt_and_optional_test(monkeypatch: pytes
     assert trainer.test_kwargs["model"] is lightning_module
     assert trainer.test_kwargs["datamodule"] is datamodule
     assert trainer.test_kwargs["ckpt_path"] == "best.ckpt"
+    assert (tmp_path / "train_resolved.yaml").exists()
 
 
 @pytest.mark.parametrize(
@@ -101,11 +117,12 @@ def test_run_train_cfg_forwards_resume_ckpt_and_optional_test(monkeypatch: pytes
     ],
 )
 def test_run_eval_cfg_runs_selected_split(
-    eval_split: str, expected_call: str, monkeypatch: pytest.MonkeyPatch
+    eval_split: str, expected_call: str, monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     cfg = OmegaConf.create(
         {
             "run_smoke": False,
+            "output_dir": str(tmp_path),
             "checkpoint_path": "model.ckpt",
             "eval_split": eval_split,
             "datamodule": {"_target_": "dummy.datamodule"},
@@ -143,12 +160,14 @@ def test_run_eval_cfg_runs_selected_split(
         assert trainer.validate_kwargs is not None
         assert trainer.test_kwargs is None
         assert trainer.validate_kwargs["ckpt_path"] == "model.ckpt"
+    assert (tmp_path / "eval_resolved.yaml").exists()
 
 
-def test_run_eval_cfg_rejects_unknown_split(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_eval_cfg_rejects_unknown_split(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     cfg = OmegaConf.create(
         {
             "run_smoke": False,
+            "output_dir": str(tmp_path),
             "checkpoint_path": None,
             "eval_split": "unknown",
             "datamodule": {"_target_": "dummy.datamodule"},
@@ -173,6 +192,7 @@ def test_train_and_eval_checkpoint_roundtrip(tmp_path) -> None:
             config_name="_train",
             overrides=[
                 "run_smoke=false",
+                "datamodule=demo",
                 f"output_dir={tmp_path}",
                 "trainer.max_epochs=1",
                 "trainer.limit_train_batches=1",
@@ -193,6 +213,7 @@ def test_train_and_eval_checkpoint_roundtrip(tmp_path) -> None:
             config_name="_eval",
             overrides=[
                 "run_smoke=false",
+                "datamodule=demo",
                 f"output_dir={tmp_path}",
                 f"checkpoint_path='{checkpoint}'",
                 "eval_split=test",
@@ -200,6 +221,7 @@ def test_train_and_eval_checkpoint_roundtrip(tmp_path) -> None:
                 "trainer.logger=false",
                 "trainer.enable_checkpointing=false",
                 "trainer.enable_model_summary=false",
+                "trainer.callbacks=[]",
             ],
         )
     assert cli._run_eval_cfg(eval_cfg) == 0
