@@ -36,7 +36,7 @@ def _example_batch() -> MEDSTorchBatch:
 def test_trainable_stage_parameters_are_registered_on_model() -> None:
     model = RetrievalAugmentedModel(
         encoder=MEDSCodeEncoder(),
-        query_projector=SequenceMeanQueryProjector(out_dim=4),
+        query_projector=SequenceMeanQueryProjector(in_dim=1, out_dim=4),
         retriever=TopKPayloadRetriever(
             doc_key_embeddings=torch.FloatTensor([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]]),
             doc_tokens=torch.LongTensor([[1, 2, 3, 4], [4, 3, 2, 1]]),
@@ -62,7 +62,7 @@ def test_stage_forward_aliases_named_methods() -> None:
     enc_via_forward = encoder(batch)
     assert torch.equal(enc_via_method.patient_state, enc_via_forward.patient_state)
 
-    projector = SequenceMeanQueryProjector(out_dim=4)
+    projector = SequenceMeanQueryProjector(in_dim=1, out_dim=4)
     q_via_method = projector.project(enc_via_method.patient_state)
     q_via_forward = projector(enc_via_method.patient_state)
     assert torch.equal(q_via_method.query_embeddings, q_via_forward.query_embeddings)

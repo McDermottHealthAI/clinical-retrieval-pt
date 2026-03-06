@@ -58,6 +58,7 @@ LinearQueryProjectorConfig = builds_any(
 )
 SequenceMeanQueryProjectorConfig = builds_any(
     SequenceMeanQueryProjector,
+    in_dim=1,
     out_dim=4,
     zen_dataclass={"cls_name": "SequenceMeanQueryProjectorConfig"},
 )

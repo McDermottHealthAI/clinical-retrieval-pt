@@ -62,20 +62,22 @@ class SequenceMeanQueryProjector(nn.Module):
     sequence dimension and emits a single retrieval query per patient.
 
     Args:
+        in_dim: Input patient-state size ``D_ehr``.
         out_dim: Retrieval query size ``D_ret``.
     """
 
-    def __init__(self, *, out_dim: int) -> None:
+    def __init__(self, *, in_dim: int, out_dim: int) -> None:
         super().__init__()
+        self.in_dim = int(in_dim)
         self.out_dim = int(out_dim)
-        self.linear = nn.LazyLinear(self.out_dim)
+        self.linear = nn.Linear(self.in_dim, self.out_dim)
 
     def project(self, patient_state: Tensor) -> QueryOutput:
         """Mean-pool over sequence positions and emit one query per sample.
 
         Args:
-            patient_state: Encoded patient tensor with shape ``(B, S_ehr)`` or
-                ``(B, S_ehr, D_ehr)``.
+            patient_state: Encoded patient tensor with shape ``(B, S_ehr, D_ehr)``
+                or raw sequence tensor with shape ``(B, S_ehr)`` when ``in_dim=1``.
 
         Returns:
             ``QueryOutput`` with:
@@ -84,7 +86,7 @@ class SequenceMeanQueryProjector(nn.Module):
 
         Examples:
             >>> import torch
-            >>> projector = SequenceMeanQueryProjector(out_dim=2)
+            >>> projector = SequenceMeanQueryProjector(in_dim=2, out_dim=2)
             >>> patient_state = torch.FloatTensor(
             ...     [
             ...         [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
