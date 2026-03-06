@@ -2,22 +2,20 @@ import torch
 from meds_torchdata import MEDSTorchBatch
 from torch import nn
 
-from medrap.configs import default_pipeline_config, instantiate_model
 from medrap.encoders import MEDSCodeEncoder
 from medrap.fusion import ReplaceFusion
-from medrap.heads import IdentityHead
 from medrap.model import RetrievalAugmentedModel
 from medrap.pooling import IdentityPooling
-from medrap.query_projection import IdentityQueryProjector
-from medrap.retrieval_encoder import IdentityRetrievalEncoder
-from medrap.retrievers import StaticRetriever
-from medrap.types import RetrieverOutput
+from medrap.query_projection import SequenceMeanQueryProjector
+from medrap.retrieval_encoder import MeanPooledRetrievalEncoder, TokenFeatureRetrievalEncoder
+from medrap.retrievers import TopKPayloadRetriever
+from medrap.types import FusionInput, RetrieverOutput
 
 
 class TrainableHead(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.linear = nn.Linear(4, 2)
+        self.linear = nn.Linear(2, 2)
 
     def predict(self, pooled_state: torch.Tensor) -> torch.Tensor:
         return self.linear(pooled_state)
@@ -35,27 +33,16 @@ def _example_batch() -> MEDSTorchBatch:
     )
 
 
-def test_default_pipeline_builds_nn_module_stages() -> None:
-    model = instantiate_model(default_pipeline_config())
-
-    assert isinstance(model, nn.Module)
-    assert isinstance(model.encoder, nn.Module)
-    assert isinstance(model.query_projector, nn.Module)
-    assert isinstance(model.retrieval_encoder, nn.Module)
-    assert isinstance(model.fusion, nn.Module)
-    assert isinstance(model.pooling, nn.Module)
-    assert isinstance(model.head, nn.Module)
-
-
 def test_trainable_stage_parameters_are_registered_on_model() -> None:
     model = RetrievalAugmentedModel(
         encoder=MEDSCodeEncoder(),
-        query_projector=IdentityQueryProjector(),
-        retriever=StaticRetriever(
-            doc_tokens=torch.FloatTensor([[1.0, 2.0, 3.0, 4.0], [4.0, 3.0, 2.0, 1.0]]),
-            doc_attention_mask=torch.LongTensor([[1, 1, 1, 1], [1, 1, 1, 1]]),
+        query_projector=SequenceMeanQueryProjector(out_dim=4),
+        retriever=TopKPayloadRetriever(
+            doc_key_embeddings=torch.FloatTensor([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]]),
+            doc_tokens=torch.LongTensor([[1, 2, 3, 4], [4, 3, 2, 1]]),
+            doc_attention_mask=torch.BoolTensor([[True, True, True, True], [True, True, True, True]]),
         ),
-        retrieval_encoder=IdentityRetrievalEncoder(),
+        retrieval_encoder=MeanPooledRetrievalEncoder(vocab_size=8, embedding_dim=2),
         fusion=ReplaceFusion(),
         pooling=IdentityPooling(),
         head=TrainableHead(),
@@ -75,28 +62,42 @@ def test_stage_forward_aliases_named_methods() -> None:
     enc_via_forward = encoder(batch)
     assert torch.equal(enc_via_method.patient_state, enc_via_forward.patient_state)
 
-    projector = IdentityQueryProjector()
+    projector = SequenceMeanQueryProjector(out_dim=4)
     q_via_method = projector.project(enc_via_method.patient_state)
     q_via_forward = projector(enc_via_method.patient_state)
     assert torch.equal(q_via_method.query_embeddings, q_via_forward.query_embeddings)
+    assert q_via_method.query_embeddings.shape == (2, 1, 4)
 
     retrieval_out = RetrieverOutput(
-        doc_tokens=torch.FloatTensor([[1.0, 2.0], [3.0, 4.0]]),
+        doc_tokens=torch.LongTensor([[1, 2], [3, 4]]),
         doc_attention_mask=torch.LongTensor([[1, 1], [1, 1]]),
     )
-    retrieval_encoder = IdentityRetrievalEncoder()
-    r_via_method = retrieval_encoder.encode(retrieval_out)
-    r_via_forward = retrieval_encoder(retrieval_out)
+    sequence_retrieval_encoder = TokenFeatureRetrievalEncoder(vocab_size=8, embedding_dim=2)
+    r_via_method = sequence_retrieval_encoder.encode(retrieval_out)
+    r_via_forward = sequence_retrieval_encoder(retrieval_out)
     assert torch.equal(r_via_method.retrieval_memory, r_via_forward.retrieval_memory)
+    assert r_via_method.retrieval_memory.shape == (2, 2, 2)
+    assert r_via_method.retrieval_memory.dtype == torch.float32
+
+    pooled_retrieval_encoder = MeanPooledRetrievalEncoder(vocab_size=8, embedding_dim=2)
+    pooled_via_method = pooled_retrieval_encoder.encode(retrieval_out)
+    pooled_via_forward = pooled_retrieval_encoder(retrieval_out)
+    assert torch.equal(pooled_via_method.retrieval_memory, pooled_via_forward.retrieval_memory)
+    assert pooled_via_method.retrieval_memory.shape == (2, 2)
+    assert pooled_via_method.retrieval_memory.dtype == torch.float32
 
     fusion = ReplaceFusion()
     f_via_method = fusion.fuse(
-        patient_state=enc_via_method.patient_state,
-        retrieval_memory=r_via_method.retrieval_memory,
+        FusionInput(
+            patient_state=enc_via_method.patient_state,
+            retrieval_memory=pooled_via_method.retrieval_memory,
+        )
     )
     f_via_forward = fusion(
-        patient_state=enc_via_method.patient_state,
-        retrieval_memory=r_via_method.retrieval_memory,
+        FusionInput(
+            patient_state=enc_via_method.patient_state,
+            retrieval_memory=pooled_via_method.retrieval_memory,
+        )
     )
     assert torch.equal(f_via_method.fused_state, f_via_forward.fused_state)
 
@@ -105,23 +106,21 @@ def test_stage_forward_aliases_named_methods() -> None:
     p_via_forward = pooling(f_via_method.fused_state)
     assert torch.equal(p_via_method, p_via_forward)
 
-    head = IdentityHead()
-    h_via_method = head.predict(p_via_method)
-    h_via_forward = head(p_via_method)
-    assert torch.equal(h_via_method, h_via_forward)
 
-
-def test_static_retriever_coerces_list_inputs_to_expected_tensor_dtypes() -> None:
-    retriever = StaticRetriever(
-        doc_tokens=[[1, 2, 3]],
-        doc_attention_mask=[[1, 0, 1]],
-        doc_scores=[[0.2, 0.8]],
-        doc_ids=[[10, 11]],
+def test_topk_payload_retriever_returns_query_dependent_payloads() -> None:
+    retriever = TopKPayloadRetriever(
+        doc_key_embeddings=torch.FloatTensor([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]),
+        doc_tokens=torch.LongTensor([[10, 11], [20, 21], [30, 31]]),
+        doc_attention_mask=torch.BoolTensor([[True, True], [True, True], [True, False]]),
+        doc_ids=torch.LongTensor([100, 200, 300]),
+        k=2,
     )
 
-    out = retriever.retrieve(torch.zeros((1, 3)))
+    out = retriever.retrieve(torch.FloatTensor([[[-0.1, 1.2]], [[1.0, -0.1]]]))
 
-    assert out.doc_tokens.dtype == torch.long
+    assert out.doc_ids is not None
+    assert out.doc_ids.tolist() == [[[200, 300]], [[100, 300]]]
+    assert out.doc_scores is not None and out.doc_scores.shape == (2, 1, 2)
+    assert out.doc_key_embeddings is not None
+    assert out.doc_tokens.shape == (2, 1, 2, 2)
     assert out.doc_attention_mask.dtype == torch.bool
-    assert out.doc_scores is not None and out.doc_scores.dtype == torch.float32
-    assert out.doc_ids is not None and out.doc_ids.dtype == torch.long

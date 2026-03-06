@@ -1,14 +1,12 @@
 defaults:
   - encoder: meds_code
-  - query_projector: identity
-  - retriever: static
-  - retrieval_encoder: identity
+  - query_projector: sequence_mean
+  - retriever: topk_payload
+  - retrieval_encoder: mean_pooled
   - fusion: replace
   - pooling: identity
-  - head: identity
+  - head: linear
   - _self_
-
-run_smoke: true
 
 hydra:
   run:

@@ -1,5 +1,0 @@
-_target_: medrap.retrievers.StaticRetriever
-doc_tokens:
-  - [1.0, 2.0]
-doc_attention_mask:
-  - [1, 1]

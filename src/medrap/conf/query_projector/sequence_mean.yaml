@@ -1,0 +1,2 @@
+_target_: medrap.query_projection.SequenceMeanQueryProjector
+out_dim: 4

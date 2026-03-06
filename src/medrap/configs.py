@@ -5,54 +5,113 @@ from concrete components.
 """
 
 from dataclasses import dataclass, field
+from typing import Any, cast
 
+import torch
 from hydra.core.config_store import ConfigStore
 from hydra_zen import builds, instantiate
 
-from .encoders import MEDSCodeEncoder
-from .fusion import ReplaceFusion
-from .heads import IdentityHead
+from .encoders import MEDSCodeEncoder, TokenEmbeddingEncoder
+from .fusion import ConcatFusion, ReplaceFusion
+from .heads import LinearHead
 from .model import RetrievalAugmentedModel
-from .pooling import IdentityPooling
-from .query_projection import IdentityQueryProjector
-from .retrieval_encoder import IdentityRetrievalEncoder
-from .retrievers import StaticRetriever
+from .pooling import IdentityPooling, MaskedMeanPooling
+from .query_projection import LinearQueryProjector, SequenceMeanQueryProjector
+from .retrieval_encoder import MeanPooledRetrievalEncoder, TokenFeatureRetrievalEncoder
+from .retrievers import TopKPayloadRetriever
 
-MEDSCodeEncoderConfig = builds(
+ComponentConfig = Any
+builds_any = cast("Any", builds)
+instantiate_any = cast("Any", instantiate)
+
+
+def long_tensor_config(values: Any) -> Any:
+    """Return a Hydra-instantiable ``torch.LongTensor`` config."""
+    return builds_any(torch.LongTensor, values, populate_full_signature=False)
+
+
+def bool_tensor_config(values: Any) -> Any:
+    """Return a Hydra-instantiable ``torch.BoolTensor`` config."""
+    return builds_any(torch.BoolTensor, values, populate_full_signature=False)
+
+
+def float_tensor_config(values: Any) -> Any:
+    """Return a Hydra-instantiable ``torch.FloatTensor`` config."""
+    return builds_any(torch.FloatTensor, values, populate_full_signature=False)
+
+
+MEDSCodeEncoderConfig = builds_any(
     MEDSCodeEncoder,
     zen_dataclass={"cls_name": "MEDSCodeEncoderConfig"},
 )
-IdentityQueryProjectorConfig = builds(
-    IdentityQueryProjector,
-    zen_dataclass={"cls_name": "IdentityQueryProjectorConfig"},
+TokenEmbeddingEncoderConfig = builds_any(
+    TokenEmbeddingEncoder,
+    vocab_size=1024,
+    embedding_dim=4,
+    zen_dataclass={"cls_name": "TokenEmbeddingEncoderConfig"},
 )
-StaticRetrieverConfig = builds(
-    StaticRetriever,
+LinearQueryProjectorConfig = builds_any(
+    LinearQueryProjector,
+    in_dim=4,
+    out_dim=4,
+    zen_dataclass={"cls_name": "LinearQueryProjectorConfig"},
+)
+SequenceMeanQueryProjectorConfig = builds_any(
+    SequenceMeanQueryProjector,
+    out_dim=4,
+    zen_dataclass={"cls_name": "SequenceMeanQueryProjectorConfig"},
+)
+TopKPayloadRetrieverConfig = builds_any(
+    TopKPayloadRetriever,
     populate_full_signature=True,
-    zen_dataclass={"cls_name": "StaticRetrieverConfig"},
+    zen_dataclass={"cls_name": "TopKPayloadRetrieverConfig"},
 )
-DemoStaticRetrieverConfig = builds(
-    StaticRetriever,
+DemoTopKPayloadRetrieverConfig = builds_any(
+    TopKPayloadRetriever,
     populate_full_signature=True,
-    doc_tokens=[[1, 2]],
-    doc_attention_mask=[[1, 1]],
-    zen_dataclass={"cls_name": "DemoStaticRetrieverConfig"},
+    doc_key_embeddings=float_tensor_config(
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+        ]
+    ),
+    doc_tokens=long_tensor_config([[1, 2], [3, 4]]),
+    doc_attention_mask=bool_tensor_config([[True, True], [True, True]]),
+    zen_dataclass={"cls_name": "DemoTopKPayloadRetrieverConfig"},
 )
-IdentityRetrievalEncoderConfig = builds(
-    IdentityRetrievalEncoder,
-    zen_dataclass={"cls_name": "IdentityRetrievalEncoderConfig"},
+TokenFeatureRetrievalEncoderConfig = builds_any(
+    TokenFeatureRetrievalEncoder,
+    vocab_size=1024,
+    embedding_dim=4,
+    zen_dataclass={"cls_name": "TokenFeatureRetrievalEncoderConfig"},
 )
-ReplaceFusionConfig = builds(
+MeanPooledRetrievalEncoderConfig = builds_any(
+    MeanPooledRetrievalEncoder,
+    vocab_size=1024,
+    embedding_dim=4,
+    zen_dataclass={"cls_name": "MeanPooledRetrievalEncoderConfig"},
+)
+ReplaceFusionConfig = builds_any(
     ReplaceFusion,
     zen_dataclass={"cls_name": "ReplaceFusionConfig"},
 )
-IdentityPoolingConfig = builds(
+ConcatFusionConfig = builds_any(
+    ConcatFusion,
+    zen_dataclass={"cls_name": "ConcatFusionConfig"},
+)
+IdentityPoolingConfig = builds_any(
     IdentityPooling,
     zen_dataclass={"cls_name": "IdentityPoolingConfig"},
 )
-IdentityHeadConfig = builds(
-    IdentityHead,
-    zen_dataclass={"cls_name": "IdentityHeadConfig"},
+MaskedMeanPoolingConfig = builds_any(
+    MaskedMeanPooling,
+    zen_dataclass={"cls_name": "MaskedMeanPoolingConfig"},
+)
+LinearHeadConfig = builds_any(
+    LinearHead,
+    in_dim=4,
+    out_dim=2,
+    zen_dataclass={"cls_name": "LinearHeadConfig"},
 )
 
 
@@ -62,20 +121,18 @@ class PipelineConfig:
 
     # ``object`` keeps Hydra/OmegaConf structured-config compatibility while still
     # allowing stage-specific hydra-zen config objects.
-    encoder: object = field(default_factory=MEDSCodeEncoderConfig)
-    query_projector: object = field(default_factory=IdentityQueryProjectorConfig)
-    retriever: object = field(default_factory=DemoStaticRetrieverConfig)
-    retrieval_encoder: object = field(default_factory=IdentityRetrievalEncoderConfig)
-    fusion: object = field(default_factory=ReplaceFusionConfig)
-    pooling: object = field(default_factory=IdentityPoolingConfig)
-    head: object = field(default_factory=IdentityHeadConfig)
+    encoder: ComponentConfig = field(default_factory=MEDSCodeEncoderConfig)
+    query_projector: ComponentConfig = field(default_factory=SequenceMeanQueryProjectorConfig)
+    retriever: ComponentConfig = field(default_factory=DemoTopKPayloadRetrieverConfig)
+    retrieval_encoder: ComponentConfig = field(default_factory=MeanPooledRetrievalEncoderConfig)
+    fusion: ComponentConfig = field(default_factory=ReplaceFusionConfig)
+    pooling: ComponentConfig = field(default_factory=IdentityPoolingConfig)
+    head: ComponentConfig = field(default_factory=LinearHeadConfig)
 
 
 @dataclass
 class RAPAppConfig(PipelineConfig):
     """Top-level app config for CLI/Hydra composition."""
-
-    run_smoke: bool = True
 
     @classmethod
     def add_to_config_store(cls, group: str | None = None) -> None:
@@ -93,14 +150,14 @@ def default_pipeline_config() -> PipelineConfig:
     return PipelineConfig()
 
 
-def instantiate_model(config: PipelineConfig) -> RetrievalAugmentedModel:
+def instantiate_model(config: Any) -> RetrievalAugmentedModel:
     """Instantiate a ``RetrievalAugmentedModel`` from structured config."""
     return RetrievalAugmentedModel(
-        encoder=instantiate(config.encoder),
-        query_projector=instantiate(config.query_projector),
-        retriever=instantiate(config.retriever),
-        retrieval_encoder=instantiate(config.retrieval_encoder),
-        fusion=instantiate(config.fusion),
-        pooling=instantiate(config.pooling),
-        head=instantiate(config.head),
+        encoder=instantiate_any(config.encoder),
+        query_projector=instantiate_any(config.query_projector),
+        retriever=instantiate_any(config.retriever),
+        retrieval_encoder=instantiate_any(config.retrieval_encoder),
+        fusion=instantiate_any(config.fusion),
+        pooling=instantiate_any(config.pooling),
+        head=instantiate_any(config.head),
     )

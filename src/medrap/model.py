@@ -1,45 +1,17 @@
 """RAP API model orchestration."""
 
+from meds_torchdata import MEDSTorchBatch
 from torch import nn
 
-from .types import ModelOutput
+from .types import FusionInput, ModelOutput
 
 
 class RetrievalAugmentedModel(nn.Module):
     """Composable pipeline orchestrator for RAP.
 
-    This class wires the 4-stage pipeline only; stage behavior is delegated to injected components.
-
-    Examples:
-        >>> import torch
-        >>> from medrap.encoders import MEDSCodeEncoder
-        >>> from medrap.fusion import ReplaceFusion
-        >>> from medrap.heads import IdentityHead
-        >>> from meds_torchdata import MEDSTorchBatch
-        >>> from medrap.pooling import IdentityPooling
-        >>> from medrap.query_projection import IdentityQueryProjector
-        >>> from medrap.retrieval_encoder import IdentityRetrievalEncoder
-        >>> from medrap.retrievers import StaticRetriever
-        >>> model = RetrievalAugmentedModel(
-        ...     encoder=MEDSCodeEncoder(),
-        ...     query_projector=IdentityQueryProjector(),
-        ...     retriever=StaticRetriever(doc_tokens=[[1, 2]], doc_attention_mask=[[1, 1]]),
-        ...     retrieval_encoder=IdentityRetrievalEncoder(),
-        ...     fusion=ReplaceFusion(),
-        ...     pooling=IdentityPooling(),
-        ...     head=IdentityHead(),
-        ... )
-        >>> batch = MEDSTorchBatch(
-        ...     code=torch.LongTensor([[101, 0], [42, 7]]),
-        ...     numeric_value=torch.zeros((2, 2), dtype=torch.float32),
-        ...     numeric_value_mask=torch.zeros((2, 2), dtype=torch.bool),
-        ...     time_delta_days=torch.zeros((2, 2), dtype=torch.float32),
-        ... )
-        >>> out = model.forward(batch=batch)
-        >>> out.logits
-        tensor([[1, 2]])
-        >>> sorted(out.metadata)
-        ['fusion_output', 'query_output', 'retrieval_encoder_output', 'retriever_output']
+    This class wires the RAP stage flow and delegates stage-specific logic to
+    injected modules:
+    ``encode -> query -> retrieve -> retrieval-encode -> fuse -> pool -> predict``.
     """
 
     def __init__(
@@ -62,17 +34,67 @@ class RetrievalAugmentedModel(nn.Module):
         self.pooling = pooling
         self.head = head
 
-    def forward(self, batch: object) -> ModelOutput:
-        """Run the end-to-end RAP pipeline."""
+    def forward(self, batch: MEDSTorchBatch) -> ModelOutput:
+        """Run the end-to-end RAP pipeline.
+
+        Args:
+            batch: ``MEDSTorchBatch`` input from ``meds_torchdata``.
+
+        Returns:
+            ``ModelOutput`` with:
+                - ``logits``: task output tensor
+                - ``metadata['query_output']``: ``QueryOutput`` from query projection
+                - ``metadata['retriever_output']``: ``RetrieverOutput`` from retrieval
+                - ``metadata['retrieval_encoder_output']``: ``RetrievalEncoderOutput``
+                  from retrieval encoding
+                - ``metadata['fusion_output']``: ``FusionOutput`` from fusion
+
+        Examples:
+            >>> import torch
+            >>> from medrap.encoders import MEDSCodeEncoder
+            >>> from medrap.fusion import ReplaceFusion
+            >>> from medrap.heads import LinearHead
+            >>> from meds_torchdata import MEDSTorchBatch
+            >>> from medrap.pooling import IdentityPooling
+            >>> from medrap.query_projection import SequenceMeanQueryProjector
+            >>> from medrap.retrieval_encoder import MeanPooledRetrievalEncoder
+            >>> from medrap.retrievers import TopKPayloadRetriever
+            >>> model = RetrievalAugmentedModel(
+            ...     encoder=MEDSCodeEncoder(),
+            ...     query_projector=SequenceMeanQueryProjector(out_dim=4),
+            ...     retriever=TopKPayloadRetriever(
+            ...         doc_key_embeddings=torch.FloatTensor([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]]),
+            ...         doc_tokens=torch.LongTensor([[1, 2], [3, 4]]),
+            ...         doc_attention_mask=torch.BoolTensor([[True, True], [True, True]]),
+            ...     ),
+            ...     retrieval_encoder=MeanPooledRetrievalEncoder(vocab_size=8, embedding_dim=2),
+            ...     fusion=ReplaceFusion(),
+            ...     pooling=IdentityPooling(),
+            ...     head=LinearHead(in_dim=2, out_dim=2),
+            ... )
+            >>> batch = MEDSTorchBatch(
+            ...     code=torch.LongTensor([[101, 0], [42, 7]]),
+            ...     numeric_value=torch.zeros((2, 2), dtype=torch.float32),
+            ...     numeric_value_mask=torch.zeros((2, 2), dtype=torch.bool),
+            ...     time_delta_days=torch.zeros((2, 2), dtype=torch.float32),
+            ... )
+            >>> out = model.forward(batch=batch)
+            >>> tuple(out.logits.shape)
+            (2, 2)
+            >>> sorted(out.metadata)
+            ['fusion_output', 'query_output', 'retrieval_encoder_output', 'retriever_output']
+        """
         encoder_out = self.encoder(batch)
         query_out = self.query_projector(encoder_out.patient_state)
         retrieval_out = self.retriever(query_out.query_embeddings)
         retrieval_encoded = self.retrieval_encoder(retrieval_out)
         fusion_out = self.fusion(
-            patient_state=encoder_out.patient_state,
-            retrieval_memory=retrieval_encoded.retrieval_memory,
-            retrieval_step_ids=query_out.retrieval_step_ids,
-            doc_attention_mask=retrieval_out.doc_attention_mask,
+            FusionInput(
+                patient_state=encoder_out.patient_state,
+                retrieval_memory=retrieval_encoded.retrieval_memory,
+                retrieval_step_ids=query_out.retrieval_step_ids,
+                doc_attention_mask=retrieval_out.doc_attention_mask,
+            )
         )
         pooled = self.pooling(fusion_out.fused_state)
         logits = self.head(pooled)

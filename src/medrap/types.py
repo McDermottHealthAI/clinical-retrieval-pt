@@ -1,6 +1,16 @@
 """Shared API contract types.
 
 This module defines the stage-by-stage outputs used by the RAP pipeline.
+
+Shape notation:
+    - ``B``: batch size.
+    - ``*P``: per-sample encoded patient-state shape produced by the encoder.
+      In sequence mode, ``*P = (S_ehr, D_ehr)`` so patient state is
+      ``(B, S_ehr, D_ehr)``. In tabular mode, ``*P = (D_ehr,)`` so patient
+      state is ``(B, D_ehr)``.
+    - ``*F``: per-sample fused-state shape produced by the fusion module.
+      It depends on configuration (for example ``(S_ehr, D_fused)``,
+      ``(D_ehr + D_mem,)``, or ``(D_mem,)``).
 """
 
 from dataclasses import dataclass, field
@@ -58,11 +68,31 @@ class RetrievalEncoderOutput:
     """Output of retrieval encoding.
 
     Attributes:
-        retrieval_memory: Encoded retrieval memory with shape
-            ``(B, R, K, S_doc, D_mem)``.
+        retrieval_memory: Encoded retrieval memory.
+            Supported scaffold shapes include:
+            - sequence-style token features: ``(B, R, K, S_doc, D_mem)``
+            - tabular pooled memory: ``(B, D_mem)``
     """
 
     retrieval_memory: Tensor
+
+
+@dataclass(slots=True)
+class FusionInput:
+    """Input payload for fusion stages.
+
+    Attributes:
+        patient_state: Encoded patient representation with shape ``(B, *P)``.
+        retrieval_memory: Encoded retrieval memory (for example
+            ``(B, R, K, S_doc, D_mem)``).
+        retrieval_step_ids: Optional retrieval step mapping ``(B, S_ehr)``.
+        doc_attention_mask: Optional retrieval token mask.
+    """
+
+    patient_state: Tensor
+    retrieval_memory: Tensor
+    retrieval_step_ids: Tensor | None = None
+    doc_attention_mask: Tensor | None = None
 
 
 @dataclass(slots=True)

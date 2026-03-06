@@ -1,15 +1,22 @@
 from .configs import (
-    DemoStaticRetrieverConfig,
+    DemoTopKPayloadRetrieverConfig,
     PipelineConfig,
     RAPAppConfig,
-    StaticRetrieverConfig,
+    TopKPayloadRetrieverConfig,
     default_pipeline_config,
+    float_tensor_config,
     instantiate_model,
 )
-from .encoders import MEDSCodeEncoder
+from .encoders import MEDSCodeEncoder, TokenEmbeddingEncoder
+from .fusion import ConcatFusion, ReplaceFusion
+from .heads import LinearHead
 from .model import RetrievalAugmentedModel
+from .pooling import IdentityPooling, MaskedMeanPooling
+from .query_projection import LinearQueryProjector, SequenceMeanQueryProjector
+from .retrievers import TopKPayloadRetriever, build_topk_payload_retriever_from_pt
 from .types import (
     EncoderOutput,
+    FusionInput,
     FusionOutput,
     ModelOutput,
     QueryOutput,
@@ -18,18 +25,30 @@ from .types import (
 )
 
 __all__ = [
-    "DemoStaticRetrieverConfig",
+    "ConcatFusion",
+    "DemoTopKPayloadRetrieverConfig",
     "EncoderOutput",
+    "FusionInput",
     "FusionOutput",
+    "IdentityPooling",
+    "LinearHead",
+    "LinearQueryProjector",
     "MEDSCodeEncoder",
+    "MaskedMeanPooling",
     "ModelOutput",
     "PipelineConfig",
     "QueryOutput",
     "RAPAppConfig",
+    "ReplaceFusion",
     "RetrievalAugmentedModel",
     "RetrievalEncoderOutput",
     "RetrieverOutput",
-    "StaticRetrieverConfig",
+    "SequenceMeanQueryProjector",
+    "TokenEmbeddingEncoder",
+    "TopKPayloadRetriever",
+    "TopKPayloadRetrieverConfig",
+    "build_topk_payload_retriever_from_pt",
     "default_pipeline_config",
+    "float_tensor_config",
     "instantiate_model",
 ]
