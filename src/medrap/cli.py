@@ -7,17 +7,9 @@ from collections.abc import Sequence
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from .runtime import build_example_batch, build_model_from_cfg
-
 
 def _run_cfg(cfg: DictConfig) -> int:
-    model = build_model_from_cfg(cfg)
-
-    if cfg.get("run_smoke", True):
-        out = model.forward(build_example_batch())
-        print(out.logits)
-    else:
-        print(OmegaConf.to_yaml(cfg))
+    print(OmegaConf.to_yaml(cfg))
     return 0
 
 
@@ -59,7 +51,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     for cmd in ("train", "eval"):
         sub = subparsers.add_parser(cmd)
-        sub.add_argument("overrides", nargs="*", help="Hydra overrides, e.g. run_smoke=false")
+        sub.add_argument("overrides", nargs="*", help="Hydra overrides, e.g. retriever.k=2")
 
     args = parser.parse_args(argv)
     if args.command == "train":
