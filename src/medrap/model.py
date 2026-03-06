@@ -12,6 +12,15 @@ class RetrievalAugmentedModel(nn.Module):
     This class wires the RAP stage flow and delegates stage-specific logic to
     injected modules:
     ``encode -> query -> retrieve -> retrieval-encode -> fuse -> pool -> predict``.
+
+    Args:
+        encoder: Module implementing patient encoding.
+        query_projector: Module mapping patient state to retrieval queries.
+        retriever: Module retrieving document payloads from query embeddings.
+        retrieval_encoder: Module encoding retrieved payloads into retrieval memory.
+        fusion: Module combining patient state and retrieval memory.
+        pooling: Module reducing fused state to prediction features.
+        head: Module mapping pooled features to task outputs.
     """
 
     def __init__(
