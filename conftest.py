@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import torch
+from meds_torchdata import MEDSTorchBatch
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -18,5 +20,7 @@ def _setup_doctest_namespace(
             "datetime": datetime,
             "tempfile": tempfile,
             "Path": Path,
+            "torch": torch,
+            "MEDSTorchBatch": MEDSTorchBatch,
         }
     )

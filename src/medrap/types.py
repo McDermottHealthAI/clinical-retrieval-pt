@@ -4,10 +4,8 @@ This module defines the stage-by-stage outputs used by the RAP pipeline.
 
 Shape notation:
     - ``B``: batch size.
-    - ``*P``: per-sample encoded patient-state shape produced by the encoder.
-      In sequence mode, ``*P = (S_ehr, D_ehr)`` so patient state is
-      ``(B, S_ehr, D_ehr)``. In tabular mode, ``*P = (D_ehr,)`` so patient
-      state is ``(B, D_ehr)``.
+    - ``S_ehr``: EHR sequence length (1 in tabular mode).
+    - ``D_ehr``: EHR hidden / embedding dimension (1 for scaffold encoders).
     - ``*F``: per-sample fused-state shape produced by the fusion module.
       It depends on configuration (for example ``(S_ehr, D_fused)``,
       ``(D_ehr + D_mem,)``, or ``(D_mem,)``).
@@ -23,7 +21,8 @@ class EncoderOutput:
     """Output of encode.
 
     Attributes:
-        patient_state: Encoded patient representation with shape ``(B, *P)``.
+        patient_state: Encoded patient representation with shape
+            ``(B, S_ehr, D_ehr)``.
     """
 
     patient_state: Tensor
@@ -82,7 +81,8 @@ class FusionInput:
     """Input payload for fusion stages.
 
     Attributes:
-        patient_state: Encoded patient representation with shape ``(B, *P)``.
+        patient_state: Encoded patient representation with shape
+            ``(B, S_ehr, D_ehr)``.
         retrieval_memory: Encoded retrieval memory (for example
             ``(B, R, K, S_doc, D_mem)``).
         retrieval_step_ids: Optional retrieval step mapping ``(B, S_ehr)``.

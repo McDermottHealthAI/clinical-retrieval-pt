@@ -11,7 +11,7 @@ import torch
 from hydra.core.config_store import ConfigStore
 from hydra_zen import builds, instantiate
 
-from .encoders import MEDSCodeEncoder, TokenEmbeddingEncoder
+from .encoders import MEDSCodeEncoder, TabularEncoder, TokenEmbeddingEncoder
 from .fusion import ConcatFusion, ReplaceFusion
 from .heads import LinearHead
 from .model import RetrievalAugmentedModel
@@ -49,6 +49,12 @@ TokenEmbeddingEncoderConfig = builds_any(
     vocab_size=1024,
     embedding_dim=4,
     zen_dataclass={"cls_name": "TokenEmbeddingEncoderConfig"},
+)
+TabularEncoderConfig = builds_any(
+    TabularEncoder,
+    vocab_size=1024,
+    embedding_dim=4,
+    zen_dataclass={"cls_name": "TabularEncoderConfig"},
 )
 LinearQueryProjectorConfig = builds_any(
     LinearQueryProjector,

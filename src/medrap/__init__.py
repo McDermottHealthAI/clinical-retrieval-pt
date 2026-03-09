@@ -7,7 +7,7 @@ from .configs import (
     float_tensor_config,
     instantiate_model,
 )
-from .encoders import MEDSCodeEncoder, TokenEmbeddingEncoder
+from .encoders import MEDSCodeEncoder, PatientEncoder, TabularEncoder, TokenEmbeddingEncoder
 from .fusion import ConcatFusion, ReplaceFusion
 from .heads import LinearHead
 from .model import RetrievalAugmentedModel
@@ -36,6 +36,7 @@ __all__ = [
     "MEDSCodeEncoder",
     "MaskedMeanPooling",
     "ModelOutput",
+    "PatientEncoder",
     "PipelineConfig",
     "QueryOutput",
     "RAPAppConfig",
@@ -44,6 +45,7 @@ __all__ = [
     "RetrievalEncoderOutput",
     "RetrieverOutput",
     "SequenceMeanQueryProjector",
+    "TabularEncoder",
     "TokenEmbeddingEncoder",
     "TopKPayloadRetriever",
     "TopKPayloadRetrieverConfig",
