@@ -1,0 +1,16 @@
+defaults:
+  - encoder: meds_code
+  - query_projector: sequence_mean
+  - retriever: topk_payload
+  - retrieval_encoder: mean_pooled
+  - fusion: replace
+  - pooling: identity
+  - head: linear
+  - _self_
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false
