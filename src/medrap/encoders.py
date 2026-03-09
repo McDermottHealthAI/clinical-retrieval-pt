@@ -4,26 +4,53 @@ These components convert MEDS batch inputs into dense patient representation use
 downstream fusion.
 """
 
+from abc import ABC, abstractmethod
+
 from meds_torchdata import MEDSTorchBatch
 from torch import nn
 
 from .types import EncoderOutput
 
 
-class MEDSCodeEncoder(nn.Module):
-    """Simple encoder that forwards ``batch.code`` as patient state.
+class PatientEncoder(nn.Module, ABC):
+    """Abstract base for all patient encoders.
 
-    This is a minimal scaffold encoder for MEDS-style batches in
-    Subjec-Measurement mode. It performs no learned transformation. It reads
-    ``batch.code`` from a ``MEDSTorchBatch`` and returns it unchanged as the
-    encoded patient representation.
+    Subclasses must implement :meth:`encode`, which maps a ``MEDSTorchBatch``
+    to an ``EncoderOutput``.  The ``forward`` method delegates to ``encode``
+    so that the encoder can be used as a standard ``nn.Module``.
+    """
+
+    @abstractmethod
+    def encode(self, batch: MEDSTorchBatch) -> EncoderOutput:
+        """Encode a patient batch into a dense representation.
+
+        Args:
+            batch: A ``MEDSTorchBatch``.
+
+        Returns:
+            An ``EncoderOutput`` whose ``patient_state`` has shape
+            ``(B, S_ehr, D_ehr)``.
+        """
+
+    def forward(self, batch: MEDSTorchBatch) -> EncoderOutput:
+        """Call ``encode``."""
+        return self.encode(batch)
+
+
+class MEDSCodeEncoder(PatientEncoder):
+    """Scaffold sequence encoder that casts ``batch.code`` to a float representation.
+
+    This is a minimal, non-learned encoder for MEDS-style batches. It converts
+    the integer code ids to floats and unsqueezes a trailing dimension so the
+    output satisfies the sequence-mode shape contract ``(B, S_ehr, D_ehr)``
+    with ``D_ehr = 1``.
     """
 
     def __init__(self) -> None:
         super().__init__()
 
     def encode(self, batch: MEDSTorchBatch) -> EncoderOutput:
-        """Return ``batch.code`` as the encoded patient state.
+        """Return ``batch.code`` as a float tensor with a trailing embedding dim.
 
         Args:
             batch: A ``MEDSTorchBatch`` containing a ``code`` field of shape
@@ -31,34 +58,26 @@ class MEDSCodeEncoder(nn.Module):
 
         Returns:
             An ``EncoderOutput`` where ``patient_state`` has shape
-            ``(B, S_ehr)`` and is equal to ``batch.code``.
+            ``(B, S_ehr, 1)``.
 
         Examples:
-            >>> import torch
-            >>> from meds_torchdata import MEDSTorchBatch
             >>> encoder = MEDSCodeEncoder()
             >>> batch = MEDSTorchBatch(
             ...     code=torch.LongTensor([[11, 22, 0], [7, 3, 1]]),
-            ...     numeric_value=torch.FloatTensor([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]),
-            ...     numeric_value_mask=torch.BoolTensor([[False, False, False], [False, False, False]]),
-            ...     time_delta_days=torch.FloatTensor([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]),
+            ...     numeric_value=torch.zeros(2, 3),
+            ...     numeric_value_mask=torch.zeros(2, 3, dtype=torch.bool),
+            ...     time_delta_days=torch.zeros(2, 3),
             ... )
             >>> out = encoder.encode(batch)
             >>> tuple(out.patient_state.shape)
-            (2, 3)
-            >>> torch.equal(out.patient_state, batch.code)
-            True
+            (2, 3, 1)
+            >>> out.patient_state.dtype
+            torch.float32
         """
-        if batch.code is None:
-            raise ValueError("MEDSCodeEncoder requires batch code to be present.")
-        return EncoderOutput(patient_state=batch.code)
-
-    def forward(self, batch: MEDSTorchBatch) -> EncoderOutput:
-        """Call ``encode``."""
-        return self.encode(batch)
+        return EncoderOutput(patient_state=batch.code.float().unsqueeze(-1))
 
 
-class TokenEmbeddingEncoder(nn.Module):
+class TokenEmbeddingEncoder(PatientEncoder):
     """Sequence encoder that maps ``batch.code`` to learned token embeddings.
 
     This is a minimal learned sequence encoder for MEDS-style batches. It reads
@@ -88,14 +107,12 @@ class TokenEmbeddingEncoder(nn.Module):
             ``(B, S_ehr, D_ehr)``.
 
         Examples:
-            >>> import torch
-            >>> from meds_torchdata import MEDSTorchBatch
             >>> encoder = TokenEmbeddingEncoder(vocab_size=8, embedding_dim=2)
             >>> batch = MEDSTorchBatch(
             ...     code=torch.LongTensor([[1, 2, 0], [3, 4, 5]]),
-            ...     numeric_value=torch.zeros((2, 3), dtype=torch.float32),
-            ...     numeric_value_mask=torch.zeros((2, 3), dtype=torch.bool),
-            ...     time_delta_days=torch.zeros((2, 3), dtype=torch.float32),
+            ...     numeric_value=torch.zeros(2, 3),
+            ...     numeric_value_mask=torch.zeros(2, 3, dtype=torch.bool),
+            ...     time_delta_days=torch.zeros(2, 3),
             ... )
             >>> out = encoder.encode(batch)
             >>> tuple(out.patient_state.shape)
@@ -103,10 +120,53 @@ class TokenEmbeddingEncoder(nn.Module):
             >>> out.patient_state.dtype
             torch.float32
         """
-        if batch.code is None:
-            raise ValueError("TokenEmbeddingEncoder requires batch code to be present.")
         return EncoderOutput(patient_state=self.embedding(batch.code.long()))
 
-    def forward(self, batch: MEDSTorchBatch) -> EncoderOutput:
-        """Call ``encode``."""
-        return self.encode(batch)
+
+class TabularEncoder(PatientEncoder):
+    """Tabular encoder that pools a code sequence into a single patient vector.
+
+    Embeds ``batch.code`` via a learned embedding table and mean-pools across the
+    sequence dimension to produce a ``(B, 1, D_ehr)`` patient representation.
+
+    Args:
+        vocab_size: Size of the EHR code vocabulary.
+        embedding_dim: Output hidden size ``D_ehr``.
+    """
+
+    def __init__(self, *, vocab_size: int = 1024, embedding_dim: int = 4) -> None:
+        super().__init__()
+        self.vocab_size = int(vocab_size)
+        self.embedding_dim = int(embedding_dim)
+        self.embedding = nn.Embedding(self.vocab_size, self.embedding_dim)
+
+    def encode(self, batch: MEDSTorchBatch) -> EncoderOutput:
+        """Embed and mean-pool ``batch.code`` into a tabular patient state.
+
+        Args:
+            batch: A ``MEDSTorchBatch`` containing a ``code`` field of shape
+                ``(B, S_ehr)``.
+
+        Returns:
+            An ``EncoderOutput`` where ``patient_state`` has shape
+            ``(B, 1, D_ehr)``.
+
+        Examples:
+            >>> encoder = TabularEncoder(vocab_size=8, embedding_dim=2)
+            >>> batch = MEDSTorchBatch(
+            ...     code=torch.LongTensor([[1, 2, 0], [3, 4, 5]]),
+            ...     numeric_value=torch.zeros(2, 3),
+            ...     numeric_value_mask=torch.zeros(2, 3, dtype=torch.bool),
+            ...     time_delta_days=torch.zeros(2, 3),
+            ... )
+            >>> out = encoder.encode(batch)
+            >>> tuple(out.patient_state.shape)
+            (2, 1, 2)
+            >>> out.patient_state.dtype
+            torch.float32
+            >>> tuple(encoder(batch).patient_state.shape)
+            (2, 1, 2)
+        """
+        embedded = self.embedding(batch.code.long())  # (B, S_ehr, D_ehr)
+        pooled = embedded.mean(dim=1, keepdim=True)  # (B, 1, D_ehr)
+        return EncoderOutput(patient_state=pooled)
