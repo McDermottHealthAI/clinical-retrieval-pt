@@ -4,6 +4,7 @@ These components convert encoded patient representations into retrieval queries.
 """
 
 from abc import ABC, abstractmethod
+
 from torch import Tensor, nn
 
 from .types import QueryOutput
