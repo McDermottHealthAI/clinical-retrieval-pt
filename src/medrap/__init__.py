@@ -12,7 +12,7 @@ from .fusion import ConcatFusion, ReplaceFusion
 from .heads import LinearHead
 from .model import RetrievalAugmentedModel
 from .pooling import IdentityPooling, MaskedMeanPooling
-from .query_projection import LinearQueryProjector, SequenceMeanQueryProjector
+from .query_projection import LinearQueryProjector, QueryProjector, SequenceMeanQueryProjector
 from .retrievers import TopKPayloadRetriever, build_topk_payload_retriever_from_pt
 from .types import (
     EncoderOutput,
@@ -39,6 +39,7 @@ __all__ = [
     "PatientEncoder",
     "PipelineConfig",
     "QueryOutput",
+    "QueryProjector",
     "RAPAppConfig",
     "ReplaceFusion",
     "RetrievalAugmentedModel",
