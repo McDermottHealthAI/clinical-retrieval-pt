@@ -145,5 +145,5 @@ class SequenceMeanQueryProjector(QueryProjector):
                 "SequenceMeanQueryProjector expects patient_state shaped "
                 f"(B, S_ehr, D_ehr), got {tuple(patient_state.shape)}"
             )
-        pooled = patient_state.float().mean(dim=1)
+        pooled = patient_state.mean(dim=1)
         return QueryOutput(query_embeddings=self.linear(pooled).unsqueeze(1))
