@@ -1,13 +1,34 @@
-"""Retrieval backends for RAP pipeline composition."""
+"""Retrieval backends for RAP pipeline composition.
+
+This module provides retriever implementations for small in-memory corpora and for dataset-backed corpora with
+attached nearest-neighbor indexes.
+"""
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
 import torch
+from datasets import Dataset
 from torch import Tensor, nn
 
 from .types import RetrieverOutput
+
+
+@dataclass(frozen=True, slots=True)
+class _DatasetSnapshot:
+    """Dataset snapshot used for retrieval.
+
+    Args:
+        dataset: Hugging Face dataset with an attached nearest-neighbor index.
+        index_name: Name of the attached index on ``dataset``.
+    """
+
+    dataset: Dataset
+    index_name: str
 
 
 class Retriever(nn.Module, ABC):
@@ -87,7 +108,7 @@ class InMemoryRetriever(Retriever):
 
         Args:
             query_embeddings: Query tensor with shape ``(B, R, D_ret)`` on any
-            device.
+                device.
 
         Returns:
             ``RetrieverOutput`` on same device as ``query_embeddings`` with:
@@ -143,6 +164,339 @@ class InMemoryRetriever(Retriever):
             doc_scores=top_scores,
             doc_ids=retrieved_doc_ids,
             doc_key_embeddings=retrieved_doc_key_embeddings,
+        )
+
+
+@dataclass(slots=True)
+class HFDatasetSnapshotBuilder:
+    """Build fresh indexed dataset for ``HFDatasetRetriever``.
+
+    This builder recomputes document key embeddings, writes them to a fresh
+    dataset state, and rebuilds and attaches a FAISS index on the rebuilt key
+    column. It does not modify the active retriever dataset in place.
+
+    Args:
+        source_dataset: Source Hugging Face dataset used as the source document
+            table.
+        index_name: Name of the FAISS index built on the rebuilt key embedding column
+        key_embedding_column: Column that stores rebuilt document key embeddings.
+        encode_documents: Callable that returns one key embedding per
+            row in a batched dataset mapping input.
+        batch_size: Batch size used when rebuilding the key embedding column.
+    """
+
+    source_dataset: Dataset
+    index_name: str
+    key_embedding_column: str
+    encode_documents: Callable[[dict[str, list[object]], object | None], list[list[float]]]
+    batch_size: int = 256
+
+    def build_snapshot(self, refresh_context: object | None = None) -> _DatasetSnapshot:
+        """Build a fresh indexed dataset snapshot.
+
+        Args:
+            refresh_context: Optional build input passed to
+                ``encode_documents``.
+
+        Returns:
+            A fresh ``_DatasetSnapshot`` with rebuilt document key embeddings
+            and a FAISS index on the rebuilt key column.
+
+        Examples:
+            >>> dataset = FakeBuildDataset(
+            ...     columns={
+            ...         "doc_tokens": [[10, 11], [20, 21]],
+            ...         "doc_attention_mask": [[1, 1], [1, 0]],
+            ...         "doc_key_embeddings": [[9.0, 9.0], [9.0, 9.0]],
+            ...     }
+            ... )
+            >>> builder = HFDatasetSnapshotBuilder(
+            ...     source_dataset=dataset,
+            ...     index_name="retrieval",
+            ...     key_embedding_column="doc_key_embeddings",
+            ...     encode_documents=lambda batch, _refresh_context: (
+            ...         [[1.0, 0.0] for _ in batch["doc_tokens"]]
+            ...     ),
+            ...     batch_size=1,
+            ... )
+            >>> snapshot = builder.build_snapshot()
+            >>> snapshot.index_name
+            'retrieval'
+            >>> snapshot.dataset["doc_key_embeddings"]
+            [[1.0, 0.0], [1.0, 0.0]]
+        """
+        dataset = self.source_dataset
+        if self.key_embedding_column in dataset.column_names:
+            dataset = dataset.remove_columns(self.key_embedding_column)
+
+        def add_key_embeddings(batch: dict[str, list[object]]) -> dict[str, list[list[float]]]:
+            embeddings = self.encode_documents(batch, refresh_context)
+            expected_length = len(next(iter(batch.values()), []))
+            if len(embeddings) != expected_length:
+                raise ValueError(
+                    "encode_documents must return one key embedding per dataset row in the batch"
+                )
+            return {self.key_embedding_column: embeddings}
+
+        # Dataset.map returns a fresh dataset object for the rebuilt snapshot.
+        dataset = dataset.map(
+            add_key_embeddings,
+            batched=True,
+            batch_size=self.batch_size,
+        )
+        dataset.add_faiss_index(column=self.key_embedding_column, index_name=self.index_name)
+        return _DatasetSnapshot(dataset=dataset, index_name=self.index_name)
+
+
+class HFDatasetRetriever(Retriever):
+    """Dataset-backed FAISS retriever.
+
+    Uses a Hugging Face dataset as the document store and a FAISS index for
+    nearest-neighbor retrieval. Retrieval serves from the current indexed
+    dataset. If a refresh builder is provided, a new indexed dataset can be
+    built in the background and swapped in when ready.
+
+    Args:
+        active_snapshot: Current indexed dataset state used for retrieval.
+        snapshot_builder: Optional builder used to construct refreshed
+            indexed dataset states.
+        doc_tokens_column: Column containing document token ids.
+        doc_attention_mask_column: Column containing document attention masks.
+        k: Number of documents to return per query.
+        doc_ids_column: Optional column containing document ids.
+        doc_key_embeddings_column: Optional column containing document key
+            embeddings.
+    """
+
+    def __init__(
+        self,
+        *,
+        active_snapshot: _DatasetSnapshot,
+        snapshot_builder: HFDatasetSnapshotBuilder | None = None,
+        doc_tokens_column: str,
+        doc_attention_mask_column: str,
+        k: int = 1,
+        doc_ids_column: str | None = None,
+        doc_key_embeddings_column: str | None = None,
+    ) -> None:
+        super().__init__()
+
+        self.k = k
+        self._doc_tokens_column = doc_tokens_column
+        self._doc_attention_mask_column = doc_attention_mask_column
+        self._doc_ids_column = doc_ids_column
+        self._doc_key_embeddings_column = doc_key_embeddings_column
+
+        self._snapshot_builder = snapshot_builder
+        self._active_snapshot = active_snapshot
+        self._validate_snapshot(self._active_snapshot)
+        if snapshot_builder is not None:
+            self._refresh_executor = ThreadPoolExecutor(max_workers=1)
+        else:
+            self._refresh_executor = None
+        self._refresh_job: Future[_DatasetSnapshot] | None = None
+
+    def _validate_snapshot(self, snapshot: _DatasetSnapshot) -> None:
+        dataset = snapshot.dataset
+
+        if self.k < 1 or self.k > len(dataset):
+            raise ValueError("k must be between 1 and the number of dataset rows")
+
+        dataset_columns = set(dataset.column_names)
+        required_columns = {self._doc_tokens_column, self._doc_attention_mask_column}
+        missing_required = required_columns - dataset_columns
+        if missing_required:
+            raise ValueError(f"dataset is missing required columns: {sorted(missing_required)}")
+
+        optional_columns = [self._doc_ids_column, self._doc_key_embeddings_column]
+        missing_optional = [col for col in optional_columns if col is not None if col not in dataset_columns]
+        if missing_optional:
+            raise ValueError(f"dataset is missing optional columns: {sorted(missing_optional)}")
+
+        try:
+            dataset.get_index(snapshot.index_name)
+        except Exception as exc:
+            raise ValueError(f"dataset does not have a FAISS index named {snapshot.index_name!r}") from exc
+
+    def start_refresh(self, *, refresh_context: object | None = None) -> bool:
+        """Start a background snapshot rebuild.
+
+        Args:
+            refresh_context: Optional input forwarded to the snapshot builder.
+
+        Returns:
+            ``True`` if a new refresh job was started, or ``False`` if a refresh
+            job is already running
+        """
+        if self._snapshot_builder is None or self._refresh_executor is None:
+            raise RuntimeError("refresh is not available without a snapshot builder")
+        if self._refresh_job is not None:
+            return False
+        self._refresh_job = self._refresh_executor.submit(
+            self._snapshot_builder.build_snapshot,
+            refresh_context,
+        )
+        return True
+
+    def close(self) -> None:
+        """Shut down the refresh executor."""
+        if self._refresh_executor is not None:
+            self._refresh_executor.shutdown(wait=False, cancel_futures=False)
+            self._refresh_executor = None
+
+    def _poll_refresh(self) -> bool:
+        """Swap in a finished refresh snapshot if one is available."""
+        refresh_job = self._refresh_job
+        if refresh_job is None:
+            return False
+        if not refresh_job.done():
+            return False
+
+        self._refresh_job = None
+        new_snapshot = refresh_job.result()
+        self._validate_snapshot(new_snapshot)
+        self._active_snapshot = new_snapshot
+        return True
+
+    def _search_index(self, query_embeddings: Tensor, snapshot: _DatasetSnapshot) -> tuple[Tensor, Tensor]:
+        """Search the active dataset index."""
+        batch_size, n_retrieval_steps, d_ret = query_embeddings.shape
+
+        flat_queries = (
+            query_embeddings.detach()
+            .to(torch.float32)
+            .cpu()
+            .reshape(batch_size * n_retrieval_steps, d_ret)
+            .numpy()
+        )
+
+        total_scores, total_indices = snapshot.dataset.search_batch(
+            snapshot.index_name,
+            flat_queries,
+            k=self.k,
+        )
+
+        scores = torch.as_tensor(total_scores, dtype=torch.float32).reshape(
+            batch_size,
+            n_retrieval_steps,
+            self.k,
+        )
+        row_indices = torch.as_tensor(total_indices, dtype=torch.long).reshape(
+            batch_size,
+            n_retrieval_steps,
+            self.k,
+        )
+        return scores, row_indices
+
+    def _materialize_output(
+        self,
+        *,
+        snapshot: _DatasetSnapshot,
+        row_indices: Tensor,
+        scores: Tensor,
+        output_device: torch.device,
+    ) -> RetrieverOutput:
+        """Materialize retrieved dataset rows into ``RetrieverOutput``."""
+        if row_indices.ndim != 3:
+            raise ValueError("row_indices must have shape (B, R, K)")
+        if scores.shape != row_indices.shape:
+            raise ValueError("scores must have the same shape as row_indices")
+        if (row_indices < 0).any():
+            raise RuntimeError("retrieval returned invalid dataset row indices")
+
+        batch_size, n_retrieval_steps, k = row_indices.shape
+        flat_row_indices = row_indices.reshape(-1).tolist()
+        rows = snapshot.dataset[flat_row_indices]
+
+        doc_tokens = torch.as_tensor(
+            rows[self._doc_tokens_column],
+            dtype=torch.long,
+            device=output_device,
+        ).reshape(batch_size, n_retrieval_steps, k, -1)
+
+        doc_attention_mask = torch.as_tensor(
+            rows[self._doc_attention_mask_column],
+            dtype=torch.bool,
+            device=output_device,
+        ).reshape(batch_size, n_retrieval_steps, k, -1)
+
+        doc_ids = None
+        if self._doc_ids_column is not None:
+            doc_ids = torch.as_tensor(
+                rows[self._doc_ids_column],
+                dtype=torch.long,
+                device=output_device,
+            ).reshape(batch_size, n_retrieval_steps, k)
+
+        doc_key_embeddings = None
+        if self._doc_key_embeddings_column is not None:
+            doc_key_embeddings = torch.as_tensor(
+                rows[self._doc_key_embeddings_column],
+                dtype=torch.float32,
+                device=output_device,
+            ).reshape(batch_size, n_retrieval_steps, k, -1)
+
+        return RetrieverOutput(
+            doc_tokens=doc_tokens,
+            doc_attention_mask=doc_attention_mask,
+            doc_scores=scores.to(output_device),
+            doc_ids=doc_ids,
+            doc_key_embeddings=doc_key_embeddings,
+        )
+
+    def retrieve(self, query_embeddings: Tensor) -> RetrieverOutput:
+        """Retrieve top-k documents for each query.
+
+        Args:
+            query_embeddings: Query tensor with shape ``(B, R, D_ret)``. Queries
+            maybe on any PyTorch device.
+
+        Returns:
+            ``RetrieverOutput`` on the same device as
+            ``query_embeddings`` with:
+                - ``doc_tokens`` shaped ``(B, R, K, S_doc)``
+                - ``doc_attention_mask`` shaped ``(B, R, K, S_doc)``
+                - ``doc_scores`` shaped ``(B, R, K)``
+                - optional ``doc_ids`` shaped ``(B, R, K)``
+                - optional ``doc_key_embeddings`` shaped ``(B, R, K, D_ret)``
+
+        Search is performed through the Hugging Face dataset index. Query
+        embeddings are moved to CPU/NumPy internally for search, and retrieved
+        tensors are materialized back on the query device.
+
+        Examples:
+            >>> snapshot = _DatasetSnapshot(
+            ...     dataset=FakeIndexedDataset(
+            ...         doc_tokens=[[10, 11], [20, 21]],
+            ...         doc_attention_mask=[[True, True], [True, False]],
+            ...         doc_ids=[7, 8],
+            ...     ),
+            ...     index_name="embeddings",
+            ... )
+            >>> retriever = HFDatasetRetriever(
+            ...     active_snapshot=snapshot,
+            ...     doc_tokens_column="doc_tokens",
+            ...     doc_attention_mask_column="doc_attention_mask",
+            ...     doc_ids_column="doc_ids",
+            ...     k=1,
+            ... )
+            >>> out = retriever.retrieve(torch.ones((1, 1, 4), dtype=torch.float32))
+            >>> out.doc_ids.tolist()
+            [[[7]]]
+            >>> tuple(out.doc_tokens.shape)
+            (1, 1, 1, 2)
+        """
+        if query_embeddings.ndim != 3:
+            raise ValueError("query_embeddings must have shape (B, R, D_ret)")
+
+        self._poll_refresh()
+        snapshot = self._active_snapshot
+        scores, row_indices = self._search_index(query_embeddings, snapshot)
+        return self._materialize_output(
+            snapshot=snapshot,
+            row_indices=row_indices,
+            scores=scores,
+            output_device=query_embeddings.device,
         )
 
 
