@@ -13,7 +13,7 @@ from .heads import LinearHead
 from .model import RetrievalAugmentedModel
 from .pooling import IdentityPooling, MaskedMeanPooling
 from .query_projection import LinearQueryProjector, QueryProjector, SequenceMeanQueryProjector
-from .retrievers import InMemoryRetriever, Retriever, load_in_memory_retriever_from_pt
+from .retrievers import InMemoryRetriever, Retriever, load_in_memory_retriever
 from .types import (
     EncoderOutput,
     FusionInput,
@@ -54,5 +54,5 @@ __all__ = [
     "default_pipeline_config",
     "float_tensor_config",
     "instantiate_model",
-    "load_in_memory_retriever_from_pt",
+    "load_in_memory_retriever",
 ]
