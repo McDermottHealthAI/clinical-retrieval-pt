@@ -15,7 +15,7 @@ from .model import RetrievalAugmentedModel
 from .pooling import IdentityPooling, MaskedMeanPooling
 from .query_projection import LinearQueryProjector, QueryProjector, SequenceMeanQueryProjector
 from .retrievers import InMemoryRetriever, Retriever, load_in_memory_retriever
-from .task import BinaryClassificationTask
+from .task import BinaryClassificationLoss, BinaryClassificationTask
 from .types import (
     EncoderOutput,
     FusionInput,
@@ -27,6 +27,7 @@ from .types import (
 )
 
 __all__ = [
+    "BinaryClassificationLoss",
     "BinaryClassificationTask",
     "ConcatFusion",
     "DemoInMemoryRetrieverConfig",
