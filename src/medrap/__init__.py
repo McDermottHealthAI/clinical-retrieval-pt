@@ -10,6 +10,7 @@ from .configs import (
 from .encoders import MEDSCodeEncoder, PatientEncoder, TabularEncoder, TokenEmbeddingEncoder
 from .fusion import ConcatFusion, ReplaceFusion
 from .heads import LinearHead
+from .losses import MarginalizedRetrievalLoss
 from .model import RetrievalAugmentedModel
 from .pooling import IdentityPooling, MaskedMeanPooling
 from .query_projection import LinearQueryProjector, QueryProjector, SequenceMeanQueryProjector
@@ -34,6 +35,7 @@ __all__ = [
     "LinearHead",
     "LinearQueryProjector",
     "MEDSCodeEncoder",
+    "MarginalizedRetrievalLoss",
     "MaskedMeanPooling",
     "ModelOutput",
     "PatientEncoder",
